@@ -1,0 +1,1 @@
+print("tache 1")
