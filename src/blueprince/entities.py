@@ -22,6 +22,23 @@ class Player:
         else:
             print("You can't go out of bounds.")
 
+    def pick_up(self, item):
+        pass
+
+    def use_item(self, item):
+        pass
+
 
 class Inventory:
     pass
+
+
+class PermanentItem:
+    def __init__(self, name):
+        self.name = name
+
+    def on_pickup(self):
+        pass
+
+    def on_use(self):
+        pass
