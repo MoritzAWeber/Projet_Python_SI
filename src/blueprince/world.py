@@ -6,6 +6,7 @@
 class Manor:
     WIDTH = 5
     HEIGHT = 9
+
     def __init__(self):
         self.grid = [[None for _ in range(self.WIDTH)] for _ in range(self.HEIGHT)]
 
@@ -30,24 +31,27 @@ class Manor:
 
 class Room:
 
-    def __init__(self, name, color="Blue", rarity=0, gem_cost=0, doors=None):
+    def __init__(self, name, image = None, doors = None, gem_cost=0,
+                 objets = None, effet_special = None, rarity=0, placement_condition = None):
         """
-        Parameters:
-            name (str): Name of the room (e.g., 'Bedroom', 'Chapel')
-            color (str): Room color category (Blue, Green, etc.)
-            rarity (int): 0 = common, up to 3 = rare
-            gem_cost (int): Cost in gems to place this room
-            doors (dict): Optional dict of directions to door data
+        :param name:
+        :param image:
+        :param doors:
+        :param gem_cost:
+        :param objets:
+        :param effet_special:
+        :param rarity:
+        :param placement_condition:
         """
         self.name = name
-        self.color = color
-        self.rarity = rarity
-        self.gem_cost = gem_cost
-        self.doors = doors or {}
 
-        def has_door(self, direction):
-            """
-                True if this room has a door in the given direction.
-            """
-            return direction in self.doors
+    def has_door(self, direction):
+        """
+            True if this room has a door in the given direction.
+        """
+        return direction in self.doors
         
+#   --------
+#   Room templates
+#   --------
+
