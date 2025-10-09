@@ -1,1 +1,0 @@
-print("tache 1")
