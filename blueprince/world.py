@@ -1,3 +1,6 @@
+# Classes representing the game environment
+
+
 # Manor Class --> represents the 5x9 grid of rooms
 
 class Manor:
