@@ -7,28 +7,75 @@ class Player:
         self.name = name
         self.inventory = Inventory()
         self.position = [2, 8]  # Starting position
+        
+        self.pas = 70       # Le joueur commence avec 70 pas    
+        self.or_ = 0            
+        self.gemmes = 2         # Commence avec 2
+        self.cles = 0           # Commence avec 0 
+        self.des = 0            # Commence avec 0 
+        
+        self.is_alive = True    # Utile pour la boucle de jeu principale
+        
+        
+    def a_des_pas(self):
+        """Vérifie s'il reste des pas."""
+        return self.pas > 0
+
+    def perdre_pas(self, quantite=1):
+        """Appelée quand le joueur bouge."""
+        self.pas -= quantite
+        if self.pas <= 0:
+            self.pas = 0
+            self.is_alive = False # Le joueur perd s'il n'a plus de pas !
+            print("Vous n'avez plus de pas! Game Over.")
+
+    def gagner_pas(self, quantite):
+        """Appelée quand le joueur mange une pomme, par exemple."""
+        self.pas += quantite
+        print(f"Vous gagnez {quantite} pas. Total: {self.pas}")    
+    
 
     def move(self, direction, manor):
+        #verif si le joueur il a toujours des pas 
+        if not self.a_des_pas():
+            print("Vous n'avez plus de pas. Vous ne pouvez plus bouger.")
+            return  # On arrête la fonction ici
+        
         x, y = self.position
         directions = {"up": [0, -1], "down": [0, 1], "left": [-1, 0], "right": [1, 0]}
 
         if direction.lower() in directions:
             x += directions[direction][0]
             y += directions[direction][1]
+        
+
+            if manor.in_bounds(x, y):
+                # TODO: Plus tard, il faudra aussi vérifier s'il y a une porte
+                print(f"{self.name} moves to ({x}, {y})")
+                self.position = [x, y]
+                
+                # AJOUT : PERTE D'UN PAS (SI LE DÉPLACEMENT RÉUSSIT)
+                # On perd un pas seulement si on bouge
+                self.perdre_pas(1)
+                print(f"Il vous reste {self.pas} pas.")
+            else:
+                # La direction était valide, mais mène hors du manoir
+                print("You can't go out of bounds.")
+                # (On ne perd pas de pas, car on n'a pas bougé
         else:
             print("invalid entry")
-
-        if manor.in_bounds(x, y):
-            print(f"{self.name} moves to ({x}, {y})")
-            self.position = [x, y]
-        else:
-            print("You can't go out of bounds.")
 
     def pick_up(self, item):
         pass
 
-    def use_item(self, item):
-        pass
+    def use_item(self, item_name, player):
+        for item in self.consommables:
+            if item.nom.lower() == item_name.lower():
+                item.utiliser(player) # L'objet applique son effet
+                
+                # --- MON AJOUT ---
+                self.consommables.remove(item) # On détruit l'objet consommé
+                return
 
 
 class Inventory:
@@ -207,7 +254,8 @@ class Pomme(AutreObjet):
         AutreObjet.__init__(self, "Pomme", "Redonne 2 pas")
 
     def effet(self, joueur):
-        print("Le joueur regagne 2 pas")
+        #print("Le joueur regagne 2 pas")
+        joueur.gagner_pas(2) # Appelle la méthode du joueur
 
 
 class Banane(AutreObjet):
@@ -216,7 +264,8 @@ class Banane(AutreObjet):
         AutreObjet.__init__(self, "Banane", "Redonne 3 pas")
 
     def effet(self, joueur):
-        print("Le joueur regagne 3 pas")
+        #print("Le joueur regagne 3 pas")
+        joueur.gagner_pas(3) #
 
 
 class Gateau(AutreObjet):
@@ -225,7 +274,8 @@ class Gateau(AutreObjet):
         AutreObjet.__init__(self, "Gâteau", "Redonne 10 pas")
 
     def effet(self, joueur):
-        print("Le joueur regagne 10 pas")
+        #print("Le joueur regagne 10 pas")
+        joueur.gagner_pas(10)
 
 
 class Sandwich(AutreObjet):
@@ -234,7 +284,8 @@ class Sandwich(AutreObjet):
         AutreObjet.__init__(self, "Sandwich", "Redonne 15 pas")
 
     def effet(self, joueur):
-        print("Le joueur regagne 15 pas")
+        #print("Le joueur regagne 15 pas")
+        joueur.gagner_pas(15)
 
 
 class Repas(AutreObjet):
@@ -243,7 +294,8 @@ class Repas(AutreObjet):
         AutreObjet.__init__(self, "Repas", "Redonne 25 pas")
 
     def effet(self, joueur):
-        print("Le joueur regagne 25 pas")
+        #print("Le joueur regagne 25 pas")
+        joueur.gagner_pas(25)
 
 
 
@@ -254,6 +306,7 @@ class Coffre(AutreObjet):
         AutreObjet.__init__(self, "Coffre", "Peut contenir des objets aléatoires")
 
     def effet(self, joueur):
+        # TODO: Implémenter la logique d'ouverture (clé/marteau) et de loot
         print("Le joueur ouvre un coffre avec clé ou marteau")
 
 
@@ -263,6 +316,7 @@ class EndroitCreuser(AutreObjet):
         AutreObjet.__init__(self, "Endroit a creuser", "Peut contenir des objets")
 
     def effet(self, joueur):
+        # TODO: Implémenter la logique (vérifier si le joueur a la pelle)
         print("Le joueur creuse a cet endroit")
 
 
@@ -272,4 +326,5 @@ class Casier(AutreObjet):
         AutreObjet.__init__(self, "Casier", "Present dans le vestiaire peut contenir des objets.")
 
     def effet(self, joueur):
+        # TODO: Implémenter la logique (vérifier si le joueur a une clé)
         print("Le joueur ouvre un casier une clé nécessaire")
