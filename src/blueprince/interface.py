@@ -70,41 +70,65 @@ class Game:
 
 
     ###### AFFICHAGE
+    ###### AFFICHAGE
     def render(self):
-        # Zone du manoir
+        # --- 1. Zone du manoir (fond noir) ---
         self.screen.fill(self.COLOR_BG, (0, 0, self.game_width, self.window_height))
 
-        # Panneau HUD (inventaire)
+        # --- 2. AJOUT : DESSINER LES PIÈCES DÉCOUVERTES ---
+        # On parcourt toute la grille du manoir
+        for y in range(self.ROWS):
+            for x in range(self.COLS):
+                room = self.manor.get_room(x, y) # On récupère la pièce à (x, y)
+                
+                # S'il y a une pièce ici (elle n'est pas "None")
+                if room is not None:
+                    # On définit le rectangle où dessiner
+                    rect = pygame.Rect(
+                        x * self.cell_size + self.margin,
+                        y * self.cell_size + self.margin,
+                        self.cell_size - 2 * self.margin,
+                        self.cell_size - 2 * self.margin
+                    )
+
+                    # On vérifie si la pièce a une image
+                    if room.image:
+                        # On redimensionne l'image pour qu'elle rentre pile dans la case
+                        scaled_image = pygame.transform.scale(room.image, (rect.width, rect.height))
+                        self.screen.blit(scaled_image, rect)
+                    else:
+                        # Si l'image est None (comme notre Antechamber), on dessine un carré gris
+                        pygame.draw.rect(self.screen, (100, 100, 100), rect)
+
+        # --- 3. Panneau HUD (inventaire) ---
         pygame.draw.rect(
             self.screen,
             self.COLOR_HUD,
             (self.game_width, 0, self.hud_width, self.window_height)
         )
 
-        # Dessiner le joueur
+        # --- 4. Dessiner le joueur (PAR-DESSUS les pièces) ---
         px, py = self.player.position
-        rect = pygame.Rect(
+        player_rect = pygame.Rect(
             px * self.cell_size + self.margin,
             py * self.cell_size + self.margin,
             self.cell_size - 2 * self.margin,
             self.cell_size - 2 * self.margin
         )
-        pygame.draw.rect(self.screen, self.COLOR_PLAYER, rect)
+        pygame.draw.rect(self.screen, self.COLOR_PLAYER, player_rect) # Dessine un carré jaune vif
 
-        # Texte inventaire
+        # --- 5. Texte inventaire (Inchangé) ---
         title = self.font_title.render("Inventory:", True, self.COLOR_TEXT)
         self.screen.blit(title, (self.game_width + 40, 40))
 
-        # Texte de salle actuelle
         room_label = self.font_text.render("Entrée du manoir", True, self.COLOR_TEXT)
         self.screen.blit(room_label, (self.game_width + 40, 150))
 
-        # Placeholder pour futur contenu d’inventaire
         hint = self.font_small.render("(Inventaire à venir)", True, (80, 80, 80))
         self.screen.blit(hint, (self.game_width + 40, 100))
 
+        # --- 6. Mettre à jour l'écran ---
         pygame.display.flip()
-
 
 ###### POINT D’ENTRÉE
 if __name__ == "__main__":
