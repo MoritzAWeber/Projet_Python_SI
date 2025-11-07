@@ -177,15 +177,17 @@ class Game:
         hud_rect = pygame.Rect(self.game_width, 0, self.hud_width, self.window_height)
         pygame.draw.rect(self.screen, self.COLOR_HUD, hud_rect)
 
-        # --- 3. Cadre blanc autour de la pièce actuelle ---
+        # --- 3. Cadre blanc autour de la pièce actuelle (sans cacher les portes) ---
         px, py = self.player.position
+        outer_margin = 2  # cadre plus fin et plus éloigné des bords
         room_rect = pygame.Rect(
-        px * self.cell_size + self.margin,
-        py * self.cell_size + self.margin,
-        self.cell_size - 2 * self.margin,
-        self.cell_size - 2 * self.margin
+        px * self.cell_size + self.margin - outer_margin,
+        py * self.cell_size + self.margin - outer_margin,
+        self.cell_size - 2 * self.margin + outer_margin * 2,
+        self.cell_size - 2 * self.margin + outer_margin * 2
         )
-        pygame.draw.rect(self.screen, self.COLOR_WHITE, room_rect, 4)
+        pygame.draw.rect(self.screen, self.COLOR_WHITE, room_rect, 3)
+
 
         # --- 4. Sélecteur de porte ---
         self.draw_door_selector(px, py)

@@ -36,34 +36,54 @@ class Player:
     
 
     def move(self, direction, manor):
-        #verif si le joueur il a toujours des pas 
-        if not self.a_des_pas():
-            print("Vous n'avez plus de pas. Vous ne pouvez plus bouger.")
-            return  # On arrête la fonction ici
-        
+        """Déplace le joueur si les portes sont compatibles entre les deux salles."""
         x, y = self.position
-        directions = {"up": [0, -1], "down": [0, 1], "left": [-1, 0], "right": [1, 0]}
+        current_room = manor.get_room(x, y)
 
-        if direction.lower() in directions:
-            x += directions[direction][0]
-            y += directions[direction][1]
-        
+        if not current_room:
+            print("❌ Vous n’êtes dans aucune pièce.")
+            return
 
-            if manor.in_bounds(x, y):
-                # TODO: Plus tard, il faudra aussi vérifier s'il y a une porte
-                print(f"The player moves ({x}, {y})")
-                self.position = [x, y]
-                
-                # AJOUT : PERTE D'UN PAS (SI LE DÉPLACEMENT RÉUSSIT)
-                # On perd un pas seulement si on bouge
-                self.perdre_pas(1)
-                print(f"Il vous reste {self.pas} pas.")
-            else:
-                # La direction était valide, mais mène hors du manoir
-                print("You can't go out of bounds.")
-                # (On ne perd pas de pas, car on n'a pas bougé
-        else:
-            print("invalid entry")
+        # 1️⃣ Vérifier qu'il y a une porte dans cette direction depuis la pièce actuelle
+        if direction not in current_room.doors:
+            print(f"🚫 Pas de porte vers {direction} dans {current_room.name}.")
+            return
+
+        # 2️⃣ Calculer la position de la pièce voisine
+        dx, dy = 0, 0
+        if direction == "up":
+            dy = -1
+        elif direction == "down":
+            dy = 1
+        elif direction == "left":
+            dx = -1
+        elif direction == "right":
+            dx = 1
+
+        nx, ny = x + dx, y + dy
+
+        # Vérifier si la position est valide
+        if not manor.in_bounds(nx, ny):
+            print("🚧 Impossible de sortir du manoir.")
+            return
+
+        next_room = manor.get_room(nx, ny)
+        if not next_room:
+            print("🚪 Il n’y a pas encore de pièce dans cette direction.")
+            return
+
+        # 3️⃣ Vérifier la porte opposée dans la pièce d'arrivée
+        opposite = {"up": "down", "down": "up", "left": "right", "right": "left"}
+        if opposite[direction] not in next_room.doors:
+            print(f"🚫 {next_room.name} n’a pas de porte vers {opposite[direction]}.")
+            return
+
+        # 4️⃣ Déplacement autorisé
+        self.position = [nx, ny]
+        self.pas -= 1
+        print(f"✅ Vous êtes maintenant dans {next_room.name}. ({self.pas} pas restants)")
+
+
 
     def pick_up(self, item):
         pass
