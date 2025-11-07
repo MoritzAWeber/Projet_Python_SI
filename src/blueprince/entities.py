@@ -51,7 +51,7 @@ class Player:
 
             if manor.in_bounds(x, y):
                 # TODO: Plus tard, il faudra aussi vérifier s'il y a une porte
-                print(f"{self.name} moves to ({x}, {y})")
+                print(f"The player moves ({x}, {y})")
                 self.position = [x, y]
                 
                 # AJOUT : PERTE D'UN PAS (SI LE DÉPLACEMENT RÉUSSIT)
