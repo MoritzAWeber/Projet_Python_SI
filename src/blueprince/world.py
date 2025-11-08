@@ -1,74 +1,27 @@
+# Fichier: src/blueprince/world.py
+# VERSION DE TEST (5 pièces + Héritage + Images)
+
+import pygame  # <--- AJOUTÉ (pour charger les images)
+import random  # <--- AJOUTÉ (pour la pioche)
+from abc import ABC, abstractmethod  # <--- AJOUTÉ (pour l'héritage)
+
+# --- 1. LES IMPORTS D'ENTITÉS ---
 from .entities import (
     Coffre, Casier, EndroitCreuser, Pomme, Banane, Gateau,
     Or, Gemmes, Cles, Des, Pelle, Marteau 
 )
 
-# Classes representing the game environment
-# Manor Class --> represents the 5x9 grid of rooms
-class Manor:
-    WIDTH = 5
-    HEIGHT = 9
-
-    def __init__(self):
-        """Initialise le manoir, la pioche, et place la pièce de départ."""
-        self.grid = [[None for _ in range(self.WIDTH)] for _ in range(self.HEIGHT)]
-        
-        # --- AJOUT: INITIALISER LA PIOCHE ET LA PIÈCE DE DÉPART ---
-        
-        # 1. On copie le catalogue pour créer la pioche du jeu
-        #    Note: ROOM_CATALOG est défini à la fin de ce fichier
-        self.pioche = list(ROOM_CATALOG)
-        
-        # 2. On cherche la pièce de départ ("Entrance Hall")
-        start_room = None
-        for room in self.pioche:
-            if room.name == "Entrance Hall":
-                start_room = room
-                break # On l'a trouvée
-        
-        # 3. On la place sur la grille et on la retire de la pioche
-        if start_room:
-            # Le joueur commence en [2, 8] (x=2, y=8)
-            start_x, start_y = 2, 8 
-            self.place_room(start_x, start_y, start_room)
-            
-            # Une pièce placée est retirée de la pioche (Section 2.3)
-            self.pioche.remove(start_room)
-            print(f"Pièce de départ '{start_room.name}' placée en ({start_x}, {start_y}).")
-        else:
-            # Sécurité au cas où on oublie de la mettre dans le catalogue
-            print("ERREUR: 'Entrance Hall' non trouvé dans le ROOM_CATALOG !")
-
-    def in_bounds(self, x, y):
-        """Return True if (x, y) is inside the 5x9 grid."""
-        return 0 <= x < self.WIDTH and 0 <= y < self.HEIGHT
-
-    def get_room(self, x, y):
-        """Return the room at (x, y), or None."""
-        if self.in_bounds(x, y):
-            return self.grid[y][x]
-        return None
-
-    def place_room(self, x, y, room):
-        """Place a Room in the manor at (x, y)."""
-        if not self.in_bounds(x, y):
-            raise ValueError("Position out of bounds.")
-        self.grid[y][x] = room
-
-
-# Room Class --> represents a room in the manor
-
- # exemple
-
-class Room:
+# --- 2. LA CLASSE PARENTE "Room" (Abstraite) ---
+# (C'est la classe "Room" de votre code, mais rendue abstraite)
+class Room(ABC):
     def __init__(self, name, image=None, doors=None, gem_cost=0,
-                 objets=None, effet_special=None, rarity=0, placement_condition=None):
+                 objets=None, rarity=0, placement_condition=None):
+        
         self.name = name
-        self.image = image
+        self.image = image # L'image sera chargée par les classes enfants
         self.doors = doors if doors is not None else []
         self.gem_cost = gem_cost
         self.objets = objets if objets is not None else []
-        self.effet_special = effet_special
         self.rarity = rarity
         self.placement_condition = placement_condition
 
@@ -76,518 +29,194 @@ class Room:
         return direction in self.doors
 
     def add_object(self, objet):
-        """Ajoute un objet (Coffre, Pomme ...) dans la salle."""
         self.objets.append(objet)
 
     def remove_object(self, objet):
         if objet in self.objets:
             self.objets.remove(objet)
 
+    # --- Méthodes pour les effets (POO) ---
+    def apply_effect_on_choose(self, player):
+        """Applique un effet au moment où le joueur CHOISIT la pièce."""
+        pass # La plupart des pièces ne font rien
+
+    def apply_effect_on_enter(self, player):
+        """Applique un effet au moment où le joueur ENTRE dans la pièce."""
+        pass # La plupart des pièces ne font rien
+
+# --- 3. LES 5 SOUS-CLASSES DE TEST (Héritage) ---
+# (C'est votre code, tout est correct !)
+
+# Pièce 1: Le début (Gratuite)
+class EntranceHall(Room):
+    def __init__(self):
+        super().__init__(
+            name="EntranceHall",
+            image=pygame.image.load("assets/Entrance_Hall.png"), # CHARGEMENT IMAGE
+            doors=["up", "down", "left", "right"],
+            objets=[Pomme()],
+            rarity=0
+        )
+
+# Pièce 2: Une pièce payante (Coût 3)
+class Vault(Room):
+    def __init__(self):
+        super().__init__(
+            name="Vault",
+            image=pygame.image.load("assets/Vault.png"), # CHARGEMENT IMAGE
+            doors=["down"], # Cul-de-sac
+            gem_cost=3,
+            objets=[Or()],
+            rarity=3
+        )
+
+# Pièce 3: Une autre pièce gratuite
+class Pantry(Room):
+    def __init__(self):
+        super().__init__(
+            name="Pantry",
+            image=pygame.image.load("assets/Pantry.png"), # CHARGEMENT IMAGE
+            doors=["up", "right"],
+            objets=[Banane(), Pomme()],
+            rarity=0
+        )
+
+# Pièce 4: Une pièce "carrefour" (Gratuite)
+class ConferenceRoom(Room):
+    def __init__(self):
+        super().__init__(
+            name="Conference Room",
+            image=pygame.image.load("assets/Conference_Room.png"), # CHARGEMENT IMAGE
+            doors=["up", "down", "left", "right"],
+            rarity=0
+        )
         
-#   --------
-#   Room templates
-#   --------
+# Pièce 5: Une pièce à effet (Payante)
+class Chapel(Room):
+    def __init__(self):
+        super().__init__(
+            name="Chapel",
+            image=pygame.image.load("assets/Chapel.png"), # CHARGEMENT IMAGE
+            doors=["up", "down"],
+            gem_cost=1,
+            objets=[Gemmes()],
+            rarity=2
+        )
+    
+    # Redéfinition (override) de la méthode parente
+    def apply_effect_on_enter(self, player):
+        print(f"Effet '{self.name}': +10 pas !")
+        player.gagner_pas(10)
 
+# Pièce 6: La Fin (pour tester la victoire)
+class Antechamber(Room):
+    def __init__(self):
+        super().__init__(
+            name="Antechamber",
+            # Laissez l'image à None si vous ne l'avez pas encore
+            image=pygame.image.load("assets/Antechamber.png"), # CHARGEMENT IMAGE
+            doors=["down"],
+            placement_condition="haut_du_manoir"
+        )
+
+# --- 4. LE CATALOGUE DE TEST (6 pièces) ---
 ROOM_CATALOG = [
-    
-    # --- Pièce 001: Antechamber ---
-    Room(
-        name="Antechamber",
-        image=None, 
-        doors=["down"],
-        gem_cost=0,
-        objets=[],
-        effet_special="fin_du_jeu",
-        rarity=0,
-        placement_condition="haut_du_manoir"
-    ),
-    
-    # --- Pièce 002: Audience Chamber ---
-    Room(
-        name="Audience Chamber",
-        image=None,
-        doors=["up", "down", "left", "right"],
-        gem_cost=1,
-        objets=[],
-        effet_special="reveal_adjacent_room_name",
-        rarity=1
-    ),
-    
-    # --- Pièce 003: Balcony ---
-    Room(
-        name="Balcony",
-        image=None,
-        doors=["down"],
-        gem_cost=1,
-        objets=[Gemmes()],
-        effet_special=None,
-        rarity=1,
-        placement_condition="bordure"
-    ),
+    EntranceHall(),
+    Vault(),
+    Pantry(),
+    ConferenceRoom(),
+    Chapel(),
+    Antechamber(), # On inclut la fin
+]
 
-    # --- Pièce 004: Ballroom ---
-    Room(
-        name="Ballroom",
-        image=None,
-        doors=["up", "down", "left", "right"],
-        gem_cost=2,
-        objets=[],
-        effet_special="gain_5_steps_on_choose",
-        rarity=2
-    ),
-    
-    # --- Pièce 005: Belfry ---
-    Room(
-        name="Belfry",
-        image=None,
-        doors=["up", "down", "left", "right"],
-        gem_cost=1,
-        objets=[Cles()],
-        effet_special=None,
-        rarity=1
-    ),
-    
-    # --- Pièce 006: Boudoir ---
-    Room(
-        name="Boudoir",
-        image=None,
-        doors=["left", "right"],
-        gem_cost=1,
-        objets=[Coffre()],
-        effet_special=None,
-        rarity=1
-    ),
-    
-    # --- Pièce 007: Butler's Room ---
-    Room(
-        name="Butler's Room",
-        image=None,
-        doors=["up", "left", "right"],
-        gem_cost=0,
-        objets=[Pomme()],
-        effet_special=None,
-        rarity=0
-    ),
-    
-    # --- Pièce 008: Cellar ---
-    Room(
-        name="Cellar",
-        image=None,
-        doors=["up", "right"],
-        gem_cost=0,
-        objets=[Pomme()],
-        effet_special=None,
-        rarity=0
-    ),
-    
-    # --- Pièce 009: Chamber of Mirrors ---
-    Room(
-        name="Chamber of Mirrors",
-        image=None,
-        doors=["up", "down", "left", "right"],
-        gem_cost=1,
-        objets=[],
-        effet_special="add_3_mirrored_room_to_deck",
-        rarity=2
-    ),
-    
-    # --- Pièce 010: Chapel ---
-    Room(
-        name="Chapel",
-        image=None,
-        doors=["up", "down"],
-        gem_cost=1,
-        objets=[Gemmes()],
-        effet_special="gain_10_steps_on_enter",
-        rarity=2
-    ),
-    
-    # --- Pièce 011: Cloakroom ---
-    Room(
-        name="Cloakroom",
-        image=None,
-        doors=["up", "down"],
-        gem_cost=0,
-        objets=[Or()],
-        effet_special=None,
-        rarity=0
-    ),
-    
-    # --- Pièce 012: Conference Room ---
-    Room(
-        name="Conference Room",
-        image=None,
-        doors=["up", "down", "left", "right"],
-        gem_cost=0,
-        objets=[],
-        effet_special=None,
-        rarity=0
-    ),
-    
-    # --- Pièce 013: Entrance Hall ---
-    Room(
-        name="Entrance Hall",
-        image=None,
-        doors=["up", "down", "left", "right"],
-        gem_cost=0,
-        objets=[Pomme()],
-        effet_special=None,
-        rarity=0
-    ),
-    
-    # --- Pièce 014: Furnace ---
-    Room(
-        name="Furnace",
-        image=None,
-        doors=["up", "down"],
-        gem_cost=1,
-        objets=[],
-        effet_special="augmente_chance_pieces_rouges",
-        rarity=1
-    ),
 
-    # --- Pièce 015: Gallery ---
-    Room(
-        name="Gallery",
-        image=None,
-        doors=["left", "right"],
-        gem_cost=1,
-        objets=[Or()],
-        effet_special=None,
-        rarity=1
-    ),
+# --- 5. LA CLASSE MANOR (MAINTENANT DÉFINIE *APRÈS* LE CATALOGUE) ---
+# (C'est votre classe Manor, légèrement modifiée pour le test)
+class Manor:
+    WIDTH = 5
+    HEIGHT = 9
 
-    # --- Pièce 016: Game Room ---
-    Room(
-        name="Game Room",
-        image=None,
-        doors=["up", "down", "left", "right"],
-        gem_cost=0,
-        objets=[Des()],
-        effet_special=None,
-        rarity=0
-    ),
+    def __init__(self):
+        self.grid = [[None for _ in range(self.WIDTH)] for _ in range(self.HEIGHT)]
+        
+        # 1. On copie le catalogue de 6 pièces
+        self.pioche = list(ROOM_CATALOG)
+        
+        # 2. On cherche et place "Entrance Hall"
+        start_room = None
+        for room in self.pioche:
+            if room.name == "EntranceHall":
+                start_room = room
+                break 
+        
+        if start_room:
+            start_x, start_y = 2, 8 
+            self.place_room(start_x, start_y, start_room)
+            self.pioche.remove(start_room) # On retire le Hall de la pioche
+            print(f"Pièce de départ '{start_room.name}' placée en ({start_x}, {start_y}).")
+        else:
+            print("ERREUR: 'EntranceHall' non trouvé !")
 
-    # --- Pièce 017: Garden ---
-    Room(
-        name="Garden",
-        image=None,
-        doors=["up", "down", "left", "right"],
-        gem_cost=1,
-        objets=[Gemmes(), EndroitCreuser()],
-        effet_special=None,
-        rarity=1
-    ),
+        # 3. ON RETIRE ET PLACE "Antechamber" de la pioche
+        antechamber = None
+        for room in self.pioche:
+            if room.name == "Antechamber":
+                antechamber = room
+                break
+        if antechamber:
+            self.pioche.remove(antechamber)
+            self.place_room(2, 0, antechamber) # On la place en haut au milieu
+            print("Pièce de fin 'Antechamber' placée en (2, 0).")
+        else:
+            print("ERREUR: 'Antechamber' non trouvée !")
 
-    # --- Pièce 018: Greenhouse ---
-    Room(
-        name="Greenhouse",
-        image=None,
-        doors=["up", "down"],
-        gem_cost=2,
-        objets=[],
-        effet_special="augmente_chance_pieces_vertes",
-        rarity=2,
-        placement_condition="bordure"
-    ),
+    def in_bounds(self, x, y):
+        return 0 <= x < self.WIDTH and 0 <= y < self.HEIGHT
 
-    # --- Pièce 019: Hall ---
-    Room(
-        name="Hall",
-        image=None,
-        doors=["up", "down", "left", "right"],
-        gem_cost=0,
-        objets=[],
-        effet_special=None,
-        rarity=0
-    ),
+    def get_room(self, x, y):
+        if self.in_bounds(x, y):
+            return self.grid[y][x]
+        return None
 
-    # --- Pièce 020: Kitchen ---
-    Room(
-        name="Kitchen",
-        image=None,
-        doors=["up", "left"],
-        gem_cost=0,
-        objets=[Pomme()],
-        effet_special=None,
-        rarity=0
-    ),
+    def place_room(self, x, y, room):
+        if not self.in_bounds(x, y):
+            raise ValueError("Position out of bounds.")
+        self.grid[y][x] = room
+        
+    def draw_three_rooms(self):
+        """
+        Tire 3 pièces au sort (ou moins si la pioche est petite)
+        """
+        if not self.pioche:
+            print("La pioche est vide !")
+            return []
 
-    # --- Pièce 021: Laboratory ---
-    Room(
-        name="Laboratory",
-        image=None,
-        doors=["up", "down"],
-        gem_cost=1,
-        objets=[],
-        effet_special="convertit_adjacent_en_salle_aleatoire",
-        rarity=1
-    ),
+        # 1. Séparer les pièces
+        free_rooms = [room for room in self.pioche if room.gem_cost == 0]
+        
+        choices = []
+        
+        # [cite_start]2. Assurer une pièce gratuite (Règle du PDF [cite: 378])
+        if free_rooms:
+            choices.append(random.choice(free_rooms))
+        else:
+            # S'il n'y a plus de pièces gratuites, on prend ce qui reste
+            if not self.pioche: return []
+            print("Avertissement: Plus de pièces gratuites.")
+            choices.append(random.choice(self.pioche))
 
-    # --- Pièce 022: Lavatory ---
-    Room(
-        name="Lavatory",
-        image=None,
-        doors=["up"],
-        gem_cost=0,
-        objets=[],
-        effet_special=None,
-        rarity=0
-    ),
-
-    # --- Pièce 023: Library ---
-    Room(
-        name="Library",
-        image=None,
-        doors=["up", "left", "right"],
-        gem_cost=1,
-        objets=[],
-        effet_special="gagne_1_de_en_choisissant",
-        rarity=1
-    ),
-
-    # --- Pièce 024: Living Room ---
-    Room(
-        name="Living Room",
-        image=None,
-        doors=["up", "down", "left"],
-        gem_cost=0,
-        objets=[Pomme()],
-        effet_special=None,
-        rarity=0
-    ),
-    # piece 025 : "Locker Room"
-    Room(
-        name="Locker Room",
-        image=None,
-        doors=["left", "right"],
-        gem_cost=1,
-        objets=[Casier(), Casier(), Casier()],
-        effet_special=None,
-        rarity=1
-    ),
-
-    # --- Pièce 026: Maid's Chamber ---
-    Room(
-        name="Maid's Chamber",
-        image=None,
-        doors=["up", "right"],
-        gem_cost=1,
-        objets=[],
-        effet_special="augmente_chance_trouver_objets",
-        rarity=1
-    ),
-
-    # --- Pièce 027: Master Bedroom ---
-    Room(
-        name="Master Bedroom",
-        image=None,
-        doors=["up", "left", "right"],
-        gem_cost=2,
-        objets=[Coffre()],
-        effet_special="gagne_10_pas_en_choisissant",
-        rarity=2
-    ),
-
-    # --- Pièce 028: Office ---
-    Room(
-        name="Office",
-        image=None,
-        doors=["up", "right"],
-        gem_cost=1,
-        objets=[Cles()],
-        effet_special="genere_20_or_salle_adjacente",
-        rarity=1
-    ),
-
-    # --- Pièce 029: Pantry ---
-    Room(
-        name="Pantry",
-        image=None,
-        doors=["up", "right"],
-        gem_cost=0,
-        objets=[Banane()],
-        effet_special=None,
-        rarity=0
-    ),
-
-    # --- Pièce 030: Patio ---
-    Room(
-        name="Patio",
-        image=None,
-        doors=["left", "right"],
-        gem_cost=1,
-        objets=[Gemmes()],
-        effet_special="genere_2_gemmes_salles_adjacentes",
-        rarity=1,
-        placement_condition="bordure"
-    ),
-
-    # --- Pièce 031: Pool ---
-    Room(
-        name="Pool",
-        image=None,
-        doors=["up", "down", "left", "right"],
-        gem_cost=1,
-        objets=[],
-        effet_special="ajoute_3_salles_humides_pioche",
-        rarity=1
-    ),
-
-    # --- Pièce 032: Servant's Quarters ---
-    Room(
-        name="Servant's Quarters",
-        image=None,
-        doors=["up", "down", "left", "right"],
-        gem_cost=0,
-        objets=[Banane()],
-        effet_special=None,
-        rarity=0
-    ),
-
-    # --- Pièce 033: Shed ---
-    Room(
-        name="Shed",
-        image=None,
-        doors=["up"],
-        gem_cost=0,
-        objets=[Pelle()],
-        effet_special=None,
-        rarity=0
-    ),
-
-    # --- Pièce 034: Solarium ---
-    Room(
-        name="Solarium",
-        image=None,
-        doors=["up", "down"],
-        gem_cost=2,
-        objets=[],
-        effet_special="augmente_chance_pieces_jaunes",
-        rarity=2,
-        placement_condition="bordure"
-    ),
-
-    # --- Pièce 035: Stairwell ---
-    Room(
-        name="Stairwell",
-        image=None,
-        doors=["up", "down"],
-        gem_cost=0,
-        objets=[],
-        effet_special=None,
-        rarity=0
-    ),
-
-    # --- Pièce 036: Storeroom ---
-    Room(
-        name="Storeroom",
-        image=None,
-        doors=["up", "left"],
-        gem_cost=0,
-        objets=[Cles()],
-        effet_special=None,
-        rarity=0
-    ),
-
-    # --- Pièce 037: Study ---
-    Room(
-        name="Study",
-        image=None,
-        doors=["up", "left"],
-        gem_cost=1,
-        objets=[Gemmes()],
-        effet_special=None,
-        rarity=1
-    ),
-
-    # --- Pièce 038: Terrace ---
-    Room(
-        name="Terrace",
-        image=None,
-        doors=["up", "down"],
-        gem_cost=1,
-        objets=[Gemmes(), EndroitCreuser()],
-        effet_special=None,
-        rarity=1,
-        placement_condition="bordure"
-    ),
-
-    # --- Pièce 039: Vault ---
-    Room(
-        name="Vault",
-        image=None,
-        doors=["down"],
-        gem_cost=3,
-        objets=[Or()],
-        effet_special=None,
-        rarity=3
-    ),
-
-    # --- Pièce 040: Veranda ---
-    Room(
-        name="Veranda",
-        image=None,
-        doors=["up", "down"],
-        gem_cost=2,
-        objets=[Gemmes(), EndroitCreuser()],
-        effet_special="augmente_chance_pieces_vertes",
-        rarity=2,
-        placement_condition="bordure"
-    ),
-
-    # --- Pièce 041: Vestibule ---
-    Room(
-        name="Vestibule",
-        image=None,
-        doors=["up", "down", "left", "right"],
-        gem_cost=0,
-        objets=[],
-        effet_special=None,
-        rarity=0
-    ),
-
-    # --- Pièce 042: Weight Room ---
-    Room(
-        name="Weight Room",
-        image=None,
-        doors=["up", "down"],
-        gem_cost=1,
-        objets=[],
-        effet_special="perd_5_pas_en_choisissant",
-        rarity=1
-    ),
-
-    # --- Pièce 043: Wine Cellar ---
-    Room(
-        name="Wine Cellar",
-        image=None,
-        doors=["down", "right"],
-        gem_cost=1,
-        objets=[Gateau()],
-        effet_special=None,
-        rarity=1
-    ),
-
-    # --- Pièce 044: Workshop ---
-    Room(
-        name="Workshop",
-        image=None,
-        doors=["up", "left", "right"],
-        gem_cost=1,
-        objets=[Marteau()],
-        effet_special=None,
-        rarity=1
-    ),
-
-    # --- Pièce 045: Den ---
-    Room(
-        name="Den",
-        image=None,
-        doors=["up", "down", "right"],
-        gem_cost=1,
-        objets=[Gemmes()],
-        effet_special=None,
-        rarity=1
-    )
-] # --- FIN DE LA LISTE ROOM_CATALOG ---
+        # 3. Choisir les autres
+        remaining_pioche = [room for room in self.pioche if room not in choices]
+        
+        # On prend 2 autres pièces si possible
+        num_to_draw = min(2, len(remaining_pioche))
+        if num_to_draw > 0:
+            choices.extend(random.sample(remaining_pioche, num_to_draw))
+        
+        random.shuffle(choices)
+        
+        print("Tirage de pièces :")
+        for i, room in enumerate(choices):
+            print(f"  {i+1}: {room.name} (Coût: {room.gem_cost} gemmes)")
+            
+        return choices

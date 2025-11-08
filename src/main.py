@@ -1,4 +1,4 @@
-from blueprince.interface import *
+from blueprince.game import Game
 
 
 def main():
