@@ -264,7 +264,7 @@ class MorningRoom(Room):
         super().__init__(
             name="Morning Room",
             image=pygame.image.load("assets/rooms/Morning_Room.png"),
-            doors=["down", "right"],
+            doors=["down", "left"],
             rarity=1,
             placement_condition="edge"
         )
