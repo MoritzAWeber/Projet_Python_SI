@@ -66,16 +66,17 @@ class Player:
             print("invalid entry")
 
     def pick_up(self, item):
-        pass
+        """Add item to inventory."""
+        self.inventory.add_item(item)
 
     def use_item(self, item_name, player):
-        for item in self.consommables:
+        for item in self.inventory.consumables:
             if item.nom.lower() == item_name.lower():
                 item.utiliser(player) # L'objet applique son effet
                 
                 # --- MON AJOUT ---
-                self.consommables.remove(item) # On détruit l'objet consommé
-                return
+                self.inventory.consumables.remove(item) # On détruit l'objet consommé
+                break
 
 
 class Inventory:
@@ -84,9 +85,9 @@ class Inventory:
         self.permanents = []
 
     def add_item(self, item):
-        if item.type == "consommable":
+        if item.type_ == "consommable":
             self.consumables.append(item)
-        elif item.type == "permanent":
+        elif item.type_ == "permanent":
             self.permanents.append(item)
 
     def use_item(self, item_name, player):
@@ -105,7 +106,8 @@ class Objet(ABC):
     def __init__(self, nom, description, type_objet):
         self.nom = nom
         self.description = description
-        self.type = type_objet
+        self.type_ = type_objet
+        super().__init__()
 
     @abstractmethod
     def utiliser(self, joueur):
@@ -115,9 +117,8 @@ class Objet(ABC):
 ##### Objets Consommables
 class ObjetConsommable(Objet):
     def __init__(self, nom, description, valeur):
-        Objet.__init__(self, nom, description, "consommable")
+        super().__init__(nom, description, "consommable")
         self.valeur = valeur  # intensite de l’effet
-        pass
 
     def utiliser(self, joueur):
         """Applique l'effet de l'objet sur le joueur"""
@@ -131,7 +132,7 @@ class ObjetConsommable(Objet):
 class Pas(ObjetConsommable):
     """Représente le nombre de pas disponibles"""
     def __init__(self):
-        ObjetConsommable.__init__(self, "Pas", "Permet de se deplacer", 70)
+        super().__init__("Pas", "Permet de se deplacer", 70)
 
     def effet(self, joueur):
         print("Le joueur regagne des pas")
@@ -140,7 +141,7 @@ class Pas(ObjetConsommable):
 class Or(ObjetConsommable):
     """Pieces d'or utilisées dans les magasins"""
     def __init__(self):
-        ObjetConsommable.__init__(self, "Or", "Monnaie utilisée pour acheter des objets", 0)
+        super().__init__("Or", "Monnaie utilisée pour acheter des objets", 0)
 
     def effet(self, joueur):
         print("Le joueur obtient des pieces d'or")
@@ -149,7 +150,7 @@ class Or(ObjetConsommable):
 class Gemmes(ObjetConsommable):
     """Gemmes pour tirer des pieces speciales"""
     def __init__(self):
-        ObjetConsommable.__init__(self, "Gemmes", "Permet de choisir certaines pieces", 2)
+        super().__init__("Gemmes", "Permet de choisir certaines pieces", 2)
 
     def effet(self, joueur):
         print("Le joueur obtient des gemmes.")
@@ -158,7 +159,7 @@ class Gemmes(ObjetConsommable):
 class Cles(ObjetConsommable):
     """Clés permettant d'ouvrir portes et coffres."""
     def __init__(self):
-        ObjetConsommable.__init__(self, "Cles", "Permet d'ouvrir des portes verrouillées", 0)
+        super().__init__("Cles", "Permet d'ouvrir des portes verrouillées", 0)
 
     def effet(self, joueur):
         print("Le joueur obtient une clé")
@@ -167,7 +168,7 @@ class Cles(ObjetConsommable):
 class Des(ObjetConsommable):
     """Dés pour relancer le tirage de pieces"""
     def __init__(self):
-        ObjetConsommable.__init__(self, "Dés", "Permet de relancer un tirage de pieces", 0)
+        super().__init__("Dés", "Permet de relancer un tirage de pieces", 0)
 
     def effet(self, joueur):
         print("Le joueur obtient un dé")
@@ -178,7 +179,7 @@ class ObjetPermanent(Objet):
     """Classe mère pour les objets permanents"""
 
     def __init__(self, nom, description):
-        Objet.__init__(self, nom, description, "permanent")
+        super().__init__(nom, description, "permanent")
 
     def utiliser(self, joueur):
         self.appliquer_effet(joueur)
@@ -191,7 +192,7 @@ class ObjetPermanent(Objet):
 class Pelle(ObjetPermanent):
     """Permet de creuser certains endroits"""
     def __init__(self):
-        ObjetPermanent.__init__(self, "Pelle", "Permet de creuser à certains endroits.")
+        super().__init__("Pelle", "Permet de creuser à certains endroits.")
 
     def appliquer_effet(self, joueur):
         print("Le joueur peut maintenant creuser des trous")
@@ -200,7 +201,7 @@ class Pelle(ObjetPermanent):
 class Marteau(ObjetPermanent):
     """Permet d’ouvrir les coffres sans clé"""
     def __init__(self):
-        ObjetPermanent.__init__(self, "Marteau", "Permet d’ouvrir des coffres sans clé")
+        super().__init__("Marteau", "Permet d’ouvrir des coffres sans clé")
 
     def appliquer_effet(self, joueur):
         print("Le joueur peut ouvrir les coffres sans clé")
@@ -209,7 +210,7 @@ class Marteau(ObjetPermanent):
 class KitCrochetage(ObjetPermanent):
     """Permet d’ouvrir les portes de niveau 1 sans clé"""
     def __init__(self):
-        ObjetPermanent.__init__(self, "Kit de crochetage", "Permet d’ouvrir les portes de niveau 1 sans clé")
+        super().__init__("Kit de crochetage", "Permet d’ouvrir les portes de niveau 1 sans clé")
 
     def appliquer_effet(self, joueur):
         print("Le joueur peut crocheter les portes de niveau 1")
@@ -218,7 +219,7 @@ class KitCrochetage(ObjetPermanent):
 class DetecteurMetaux(ObjetPermanent):
     """Augmente les chances de trouver des clés et des pieces"""
     def __init__(self):
-        ObjetPermanent.__init__(self, "Détecteur de métaux", "Augmente les chances de trouver des clés et de l'or")
+        super().__init__("Détecteur de métaux", "Augmente les chances de trouver des clés et de l'or")
 
     def appliquer_effet(self, joueur):
         print("Le joueur augmente ses chances de trouver des objets utiles")
@@ -227,7 +228,7 @@ class DetecteurMetaux(ObjetPermanent):
 class PatteLapin(ObjetPermanent):
     """Augmente la probabilité de trouver des objets rares"""
     def __init__(self):
-        ObjetPermanent.__init__(self, "Patte de lapin", "Augmente la chance de trouver des objets rares")
+        super().__init__("Patte de lapin", "Augmente la chance de trouver des objets rares")
 
     def appliquer_effet(self, joueur):
         print("Le joueur devient plus chanceux")
@@ -237,7 +238,7 @@ class AutreObjet(Objet):
     """Class mere pour les objets speciaux"""
 
     def __init__(self, nom, description):
-        Objet.__init__(self, nom, description, "autre")
+        super().__init__(nom, description, "autre")
 
     def utiliser(self, joueur):
         self.effet(joueur)
@@ -251,7 +252,7 @@ class AutreObjet(Objet):
 class Pomme(AutreObjet):
     """Redonne 2 pas"""
     def __init__(self):
-        AutreObjet.__init__(self, "Pomme", "Redonne 2 pas")
+        super().__init__("Pomme", "Redonne 2 pas")
 
     def effet(self, joueur):
         #print("Le joueur regagne 2 pas")
@@ -261,7 +262,7 @@ class Pomme(AutreObjet):
 class Banane(AutreObjet):
     """Redonne 3 pas"""
     def __init__(self):
-        AutreObjet.__init__(self, "Banane", "Redonne 3 pas")
+        super().__init__("Banane", "Redonne 3 pas")
 
     def effet(self, joueur):
         #print("Le joueur regagne 3 pas")
@@ -271,7 +272,7 @@ class Banane(AutreObjet):
 class Gateau(AutreObjet):
     """Redonne 10 pas"""
     def __init__(self):
-        AutreObjet.__init__(self, "Gâteau", "Redonne 10 pas")
+        super().__init__("Gâteau", "Redonne 10 pas")
 
     def effet(self, joueur):
         #print("Le joueur regagne 10 pas")
@@ -281,7 +282,7 @@ class Gateau(AutreObjet):
 class Sandwich(AutreObjet):
     """Redonne 15 pas"""
     def __init__(self):
-        AutreObjet.__init__(self, "Sandwich", "Redonne 15 pas")
+        super().__init__("Sandwich", "Redonne 15 pas")
 
     def effet(self, joueur):
         #print("Le joueur regagne 15 pas")
@@ -291,7 +292,7 @@ class Sandwich(AutreObjet):
 class Repas(AutreObjet):
     """Redonne 25 pas"""
     def __init__(self):
-        AutreObjet.__init__(self, "Repas", "Redonne 25 pas")
+        super().__init__("Repas", "Redonne 25 pas")
 
     def effet(self, joueur):
         #print("Le joueur regagne 25 pas")
@@ -303,7 +304,7 @@ class Repas(AutreObjet):
 class Coffre(AutreObjet):
     """Contient des objets peut etre ouvert avec une clé ou un marteau"""
     def __init__(self):
-        AutreObjet.__init__(self, "Coffre", "Peut contenir des objets aléatoires")
+        super().__init__( "Coffre", "Peut contenir des objets aléatoires")
 
     def effet(self, joueur):
         # TODO: Implémenter la logique d'ouverture (clé/marteau) et de loot
@@ -313,7 +314,7 @@ class Coffre(AutreObjet):
 class EndroitCreuser(AutreObjet):
     """Endroit ou le joueur peut creuser avec une pelle"""
     def __init__(self):
-        AutreObjet.__init__(self, "Endroit a creuser", "Peut contenir des objets")
+        super().__init__("Endroit a creuser", "Peut contenir des objets")
 
     def effet(self, joueur):
         # TODO: Implémenter la logique (vérifier si le joueur a la pelle)
@@ -323,7 +324,7 @@ class EndroitCreuser(AutreObjet):
 class Casier(AutreObjet):
     """Casier du vestiaire contient parfois des objets"""
     def __init__(self):
-        AutreObjet.__init__(self, "Casier", "Present dans le vestiaire peut contenir des objets.")
+        super().__init__("Casier", "Present dans le vestiaire peut contenir des objets.")
 
     def effet(self, joueur):
         # TODO: Implémenter la logique (vérifier si le joueur a une clé)

@@ -1,6 +1,6 @@
 import pygame
-from world import Manor
-from entities import Player
+from .world import Manor
+from .entities import Player
 
 
 class Game:
@@ -21,7 +21,7 @@ class Game:
 
         # Création de la fenêtre
         self.screen = pygame.display.set_mode((self.window_width, self.window_height))
-        pygame.display.set_caption("Blue Prince – Interface avec HUD")
+        pygame.display.set_caption("Blue Prince - Interface avec HUD")
 
         # Couleurs
         self.COLOR_BG = (10, 10, 20)          # Couleur manoir
@@ -45,7 +45,7 @@ class Game:
     def run(self):
         while self.running:
             self.handle_events()
-            self.render()
+            self.render_()
             self.clock.tick(30)
         pygame.quit()
 
@@ -70,7 +70,7 @@ class Game:
 
 
     ###### AFFICHAGE
-    def render(self):
+    def render_(self):
         # Zone du manoir
         self.screen.fill(self.COLOR_BG, (0, 0, self.game_width, self.window_height))
 
@@ -95,13 +95,22 @@ class Game:
         title = self.font_title.render("Inventory:", True, self.COLOR_TEXT)
         self.screen.blit(title, (self.game_width + 40, 40))
 
+        # Consumables
+        x_0 = self.game_width + 40
+        y_0 = 100
+        consumables_header = self.font_small.render("Consumables:", True, (self.COLOR_TEXT))
+        self.screen.blit(consumables_header, (x_0, y_0))
+
+        if self.player.inventory.consumables:
+            for i, item in enumerate(self.player.inventory.consumables):
+                text = f"{item.nom}"
+
         # Texte de salle actuelle
         room_label = self.font_text.render("Entrée du manoir", True, self.COLOR_TEXT)
         self.screen.blit(room_label, (self.game_width + 40, 150))
 
-        # Placeholder pour futur contenu d’inventaire
-        hint = self.font_small.render("(Inventaire à venir)", True, (80, 80, 80))
-        self.screen.blit(hint, (self.game_width + 40, 100))
+
+        
 
         pygame.display.flip()
 
