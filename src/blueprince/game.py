@@ -119,6 +119,20 @@ class Game:
         current_room = self.manor.get_room(*self.player.position)
         if not current_room:
             return
+        
+                
+        x, y = self.player.position
+        dx, dy = 0, 0
+        if self.selected_door == "up": dy = -1
+        elif self.selected_door == "down": dy = 1
+        elif self.selected_door == "left": dx = -1
+        elif self.selected_door == "right": dx = 1
+
+        nx, ny = x + dx, y + dy
+        if self.manor.get_room(nx, ny):
+            self.player.position = [nx, ny]
+            return
+
 
         if self.selected_door not in current_room.doors:
             print("❌ Pas de porte dans cette direction.")
