@@ -126,7 +126,12 @@ class Game:
         if not current_room:
             return
         
-                
+        if self.selected_door not in current_room.doors:
+            print("❌ Pas de porte dans cette direction.")
+            return
+
+
+        "get the new room position"   
         x, y = self.player.position
         dx, dy = 0, 0
         if self.selected_door == "up": dy = -1
@@ -137,16 +142,15 @@ class Game:
         nx, ny = x + dx, y + dy
 
         if not self.manor.in_bounds(nx, ny):
-            print("🚧 Cette direction sort du manoir.")
+            print("Cette direction sort du manoir.")
             self.menu_active = False
             return
 
-        if self.selected_door not in current_room.doors:
-            print("❌ Pas de porte dans cette direction.")
-            return
-        
         if self.manor.get_room(nx, ny):
-            self.player.position = [nx, ny]
+            if self.opposite_direction[self.selected_door] in self.manor.get_room(nx,ny).doors:
+                self.player.move(self.selected_door, self.manor)
+            else: 
+                print("Cette direction n'est pas accessible.")
             return
 
         # Tirage aléatoire de 3 pièces disponibles
@@ -172,7 +176,7 @@ class Game:
         self.manor.place_room(nx, ny, chosen)
         self.player.position = [nx, ny]
         self.menu_active = False
-        print(f"✅ Vous avez ajouté la pièce {chosen.name} en ({nx}, {ny})")
+        print(f"Vous avez ajouté la pièce {chosen.name} en ({nx}, {ny})")
 
     # ====================== AFFICHAGE ======================
     def render(self):
