@@ -1,14 +1,9 @@
-# Fichier: src/blueprince/world.py
-# VERSION DE TEST (5 pièces + Héritage + Images)
+import pygame
+import random
+from abc import ABC, abstractmethod
 
-import pygame  # <--- AJOUTÉ (pour charger les images)
-import random  # <--- AJOUTÉ (pour la pioche)
-from abc import ABC, abstractmethod  # <--- AJOUTÉ (pour l'héritage)
-
-# --- 1. LES IMPORTS D'ENTITÉS ---
-from entities import (
-    Coffre, Casier, EndroitCreuser, Pomme, Banane, Gateau,
-    Or, Gemmes, Cles, Des, Pelle, Marteau 
+from .entities import (
+    Pomme, Banane, Or, Gemmes, Cles, Des, Pelle, Marteau
 )
 
 # ==============================
