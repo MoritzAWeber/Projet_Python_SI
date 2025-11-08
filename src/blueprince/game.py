@@ -5,6 +5,12 @@ from .entities import Player
 
 
 class Game:
+
+    opposite_direction = {"up": "down",
+                          "down": "up",
+                          "right": "left",
+                          "left": "right"}
+
     def __init__(self):
         pygame.init()
 
@@ -129,18 +135,25 @@ class Game:
         elif self.selected_door == "right": dx = 1
 
         nx, ny = x + dx, y + dy
-        if self.manor.get_room(nx, ny):
-            self.player.position = [nx, ny]
-            return
 
+        if not self.manor.in_bounds(nx, ny):
+            print("🚧 Cette direction sort du manoir.")
+            self.menu_active = False
+            return
 
         if self.selected_door not in current_room.doors:
             print("❌ Pas de porte dans cette direction.")
             return
+        
+        if self.manor.get_room(nx, ny):
+            self.player.position = [nx, ny]
+            return
 
         # Tirage aléatoire de 3 pièces disponibles
         all_rooms = self.manor.room_catalog
-        self.menu_choices = random.sample(all_rooms, k=min(3, len(all_rooms)))
+        required_door = self.opposite_direction[self.selected_door]
+        candidates = [room for room in all_rooms if required_door in getattr(room, "doors", [])]
+        self.menu_choices = random.sample(candidates, k=min(3, len(all_rooms)))
         self.menu_index = 0
         self.menu_active = True
 
@@ -155,11 +168,6 @@ class Game:
         elif self.selected_door == "right": dx = 1
 
         nx, ny = x + dx, y + dy
-
-        if not self.manor.in_bounds(nx, ny):
-            print("🚧 Cette direction sort du manoir.")
-            self.menu_active = False
-            return
 
         self.manor.place_room(nx, ny, chosen)
         self.player.position = [nx, ny]
