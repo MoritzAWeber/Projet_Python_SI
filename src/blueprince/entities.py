@@ -64,24 +64,24 @@ class Player:
 
         # Vérifier si la position est valide
         if not manor.in_bounds(nx, ny):
-            print("🚧 Impossible de sortir du manoir.")
+            print("Impossible de sortir du manoir.")
             return
 
         next_room = manor.get_room(nx, ny)
         if not next_room:
-            print("🚪 Il n’y a pas encore de pièce dans cette direction.")
+            print("Il n’y a pas encore de pièce dans cette direction.")
             return
 
         # 3️⃣ Vérifier la porte opposée dans la pièce d'arrivée
         opposite = {"up": "down", "down": "up", "left": "right", "right": "left"}
         if opposite[direction] not in next_room.doors:
-            print(f"🚫 {next_room.name} n’a pas de porte vers {opposite[direction]}.")
+            print(f"{next_room.name} n’a pas de porte vers {opposite[direction]}.")
             return
 
         # 4️⃣ Déplacement autorisé
         self.position = [nx, ny]
         self.pas -= 1
-        print(f"✅ Vous êtes maintenant dans {next_room.name}. ({self.pas} pas restants)")
+        print(f"Vous êtes maintenant dans {next_room.name}. ({self.pas} pas restants)")
 
 
 

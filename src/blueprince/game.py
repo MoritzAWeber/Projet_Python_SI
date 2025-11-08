@@ -127,17 +127,13 @@ class Game:
             return
         
         if self.selected_door not in current_room.doors:
-            print("❌ Pas de porte dans cette direction.")
+            print("Pas de porte dans cette direction.")
             return
 
 
-        "get the new room position"   
+        # get the new room position  
         x, y = self.player.position
-        dx, dy = 0, 0
-        if self.selected_door == "up": dy = -1
-        elif self.selected_door == "down": dy = 1
-        elif self.selected_door == "left": dx = -1
-        elif self.selected_door == "right": dx = 1
+        dx, dy = self.manor.get_direction_offset(self.selected_door)
 
         nx, ny = x + dx, y + dy
 
@@ -154,10 +150,7 @@ class Game:
             return
 
         # Tirage aléatoire de 3 pièces disponibles
-        all_rooms = self.manor.room_catalog
-        required_door = self.opposite_direction[self.selected_door]
-        candidates = [room for room in all_rooms if required_door in getattr(room, "doors", [])]
-        self.menu_choices = random.sample(candidates, k=min(3, len(all_rooms)))
+        self.menu_choices = self.manor.draw_three_rooms(self.player.position, self.selected_door)
         self.menu_index = 0
         self.menu_active = True
 
@@ -165,16 +158,12 @@ class Game:
         """Valide le choix de la pièce et la place dans le manoir."""
         chosen = self.menu_choices[self.menu_index]
         x, y = self.player.position
-        dx, dy = 0, 0
-        if self.selected_door == "up": dy = -1
-        elif self.selected_door == "down": dy = 1
-        elif self.selected_door == "left": dx = -1
-        elif self.selected_door == "right": dx = 1
+        dx, dy = self.manor.get_direction_offset(self.selected_door)
 
         nx, ny = x + dx, y + dy
 
         self.manor.place_room(nx, ny, chosen)
-        self.player.position = [nx, ny]
+        self.player.move(self.selected_door, self.manor)
         self.menu_active = False
         print(f"Vous avez ajouté la pièce {chosen.name} en ({nx}, {ny})")
 

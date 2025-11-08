@@ -379,8 +379,16 @@ class Manor:
 
         random.shuffle(choices)
 
-        print("🎲 Tirage de pièces compatibles :")
+        print("Tirage de pièces compatibles :")
         for r in choices:
             print(f" - {r.name} | portes: {r.doors} | condition: {r.placement_condition}")
 
         return choices
+    
+    def get_direction_offset(self, direction):
+        """Returns (dx, dy) for given direction."""
+        if direction == "up": return (0, -1)
+        elif direction == "down": return (0, 1)
+        elif direction == "left": return (-1, 0)
+        elif direction == "right": return (1, 0)
+        return (0, 0)
