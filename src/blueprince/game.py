@@ -121,36 +121,21 @@ class Game:
 
     # ====================== LOGIQUE DU JEU ======================
     def open_door_menu(self):
-        """Affiche le menu de tirage de pièces."""
-        current_room = self.manor.get_room(*self.player.position)
-        if not current_room:
-            return
         
-        if self.selected_door not in current_room.doors:
-            print("Pas de porte dans cette direction.")
+        if not self.player.can_move(self.selected_door, self.manor):
+            print("Cette direction n'est pas accessible.")
             return
 
-
-        # get the new room position  
         x, y = self.player.position
         dx, dy = self.manor.get_direction_offset(self.selected_door)
-
         nx, ny = x + dx, y + dy
 
-        if not self.manor.in_bounds(nx, ny):
-            print("Cette direction sort du manoir.")
-            self.menu_active = False
-            return
-
         if self.manor.get_room(nx, ny):
-            if self.opposite_direction[self.selected_door] in self.manor.get_room(nx,ny).doors:
-                self.player.move(self.selected_door, self.manor)
-            else: 
-                print("Cette direction n'est pas accessible.")
+            self.player.move(self.selected_door, self.manor)
             return
-
+        
         # Tirage aléatoire de 3 pièces disponibles
-        self.menu_choices = self.manor.draw_three_rooms(self.player.position, self.selected_door)
+        self.menu_choices = self.manor.draw_three_rooms(self.player.position, self.selected_door, self.manor.pioche)
         self.menu_index = 0
         self.menu_active = True
 

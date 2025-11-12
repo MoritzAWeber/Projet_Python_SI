@@ -288,6 +288,10 @@ ROOM_CATALOG = [
 class Manor:
     WIDTH = 5
     HEIGHT = 9
+    opposite_direction = {"up": "down",
+                          "down": "up",
+                          "right": "left",
+                          "left": "right"}
 
     def __init__(self):
         self.grid = [[None for _ in range(self.WIDTH)] for _ in range(self.HEIGHT)]
@@ -317,7 +321,7 @@ class Manor:
             raise ValueError("Position hors limites.")
         self.grid[y][x] = room
 
-    def draw_three_rooms(self, current_pos, direction):
+    def draw_three_rooms(self, current_pos, direction, room_catalog):
         """
         Tire 3 pièces compatibles selon la position du joueur et la direction choisie.
         - Respecte les portes compatibles
@@ -326,23 +330,14 @@ class Manor:
         - Garantit une pièce gratuite
         """
         x, y = current_pos
-        possible_rooms = []
-        opposite = {"up": "down", "down": "up", "left": "right", "right": "left"}
+        possible_rooms = self.get_possible_rooms(current_pos, direction, room_catalog)
 
-        for room in self.pioche:
+        # Filter by placement conditions
+        filtered_rooms = []
+        for room in possible_rooms:
             cond = room.placement_condition
-
-            # 1️⃣ Éviter les pièces qui sortent de la grille (bords)
-            if direction == "up" and y == 0:
-                continue
-            if direction == "down" and y == self.HEIGHT - 1:
-                continue
-            if direction == "left" and x == 0:
-                continue
-            if direction == "right" and x == self.WIDTH - 1:
-                continue
-
-            # 2️⃣ Vérifier la condition de placement
+            
+            # Check placement conditions
             if cond == "edge" and not (x in (0, self.WIDTH - 1) or y in (0, self.HEIGHT - 1)):
                 continue
             if cond == "center" and (x in (0, self.WIDTH - 1) or y in (0, self.HEIGHT - 1)):
@@ -351,26 +346,22 @@ class Manor:
                 continue
             if cond == "bottom" and y != self.HEIGHT - 1:
                 continue
+                
+            filtered_rooms.append(room)
 
-            # 3️⃣ Vérifier compatibilité de porte (ex : on monte → la nouvelle pièce doit avoir "down")
-            if opposite[direction] not in room.doors:
-                continue
-
-            possible_rooms.append(room)
-
-        # 4️⃣ S'il n'y a aucune pièce compatible, proposer toute la pioche
-        if not possible_rooms:
+        # 4️ S'il n'y a aucune pièce compatible, proposer toute la pioche
+        if not filtered_rooms:
             possible_rooms = self.pioche.copy()
 
-        # 5️⃣ Tirage sans doublons et avec au moins une pièce gratuite
-        free_rooms = [r for r in possible_rooms if r.gem_cost == 0]
+        # 5️ Tirage sans doublons et avec au moins une pièce gratuite
+        free_rooms = [r for r in filtered_rooms if r.gem_cost == 0]
         choices = []
 
         # Forcer au moins une gratuite
         if free_rooms:
             choices.append(random.choice(free_rooms))
 
-        remaining = [r for r in possible_rooms if r not in choices]
+        remaining = [r for r in filtered_rooms if r not in choices]
 
         # Tirer les autres sans doublons
         num_to_draw = min(2, len(remaining))
@@ -392,3 +383,16 @@ class Manor:
         elif direction == "left": return (-1, 0)
         elif direction == "right": return (1, 0)
         return (0, 0)
+    
+    def get_possible_rooms(self, position, direction, room_catalog):
+        """Returns rooms that can be placed in given direction."""
+        x, y = position
+        dx, dy = self.get_direction_offset(direction)
+        nx, ny = x + dx, y + dy
+        
+        if not self.in_bounds(nx, ny) or self.get_room(nx, ny):
+            return []
+            
+        required_door = self.opposite_direction[direction]
+        return [r for r in room_catalog if required_door in getattr(r, "doors", [])]
+    

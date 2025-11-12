@@ -3,6 +3,12 @@ from abc import ABC, abstractmethod
 
 
 class Player:
+
+    opposite_direction = {"up": "down",
+                          "down": "up",
+                          "right": "left",
+                          "left": "right"}
+
     def __init__(self, name):
         self.name = name
         self.inventory = Inventory()
@@ -32,7 +38,25 @@ class Player:
     def gagner_pas(self, quantite):
         """Appelée quand le joueur mange une pomme, par exemple."""
         self.pas += quantite
-        print(f"Vous gagnez {quantite} pas. Total: {self.pas}")    
+        print(f"Vous gagnez {quantite} pas. Total: {self.pas}") 
+
+    def can_move(self, direction, manor):
+        """Checks if movement in direction is possible."""
+        current_room = manor.get_room(*self.position)
+        if not current_room or direction not in current_room.doors:
+            return False
+            
+        x, y = self.position
+        dx, dy = manor.get_direction_offset(direction)
+        nx, ny = x + dx, y + dy
+        
+        if not manor.in_bounds(nx, ny):
+            return False
+            
+        next_room = manor.get_room(nx, ny)
+        if next_room and self.opposite_direction[direction] not in next_room.doors:
+            return False
+        return True   
     
 
     def move(self, direction, manor):
