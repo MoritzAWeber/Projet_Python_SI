@@ -19,6 +19,8 @@ class Game:
         self.ROWS = 9
         self.cell_size = 90
         self.margin = 5
+        self.messages = []
+        self.max_messages = 5
 
         self.game_width = self.COLS * self.cell_size
         self.hud_width = int(self.cell_size * 6)
@@ -125,7 +127,7 @@ class Game:
     def open_door_menu(self):
         
         if not self.player.can_move(self.selected_door, self.manor):
-            print("Cette direction n'est pas accessible.")
+            self.add_message("Cette direction n'est pas accessible.")
             return
 
         x, y = self.player.position
@@ -175,21 +177,7 @@ class Game:
         self.screen.fill(self.COLOR_BG, (0, 0, self.game_width, self.window_height))
 
         # --- 1. Dessiner le manoir ---
-        for y in range(self.ROWS):
-            for x in range(self.COLS):
-                room = self.manor.get_room(x, y)
-                if room:
-                    rect = pygame.Rect(
-                        x * self.cell_size + self.margin,
-                        y * self.cell_size + self.margin,
-                        self.cell_size - 2 * self.margin,
-                        self.cell_size - 2 * self.margin
-                    )
-                    if room.image:
-                        scaled = pygame.transform.scale(room.image, (rect.width, rect.height))
-                        self.screen.blit(scaled, rect)
-                    else:
-                        pygame.draw.rect(self.screen, (100, 100, 100), rect)
+        self.draw_manor()
 
         # --- 2. HUD ---
         hud_rect = pygame.Rect(self.game_width, 0, self.hud_width, self.window_height)
@@ -213,13 +201,36 @@ class Game:
         # --- 5. Inventaire ---
         self.draw_inventory(self.player, hud_rect)
 
-        # --- 6. Menu de choix de pièces ---
+        # --- 6. Messages ---
+        self.draw_messages(hud_rect)
+
+        # --- 7. Menu de choix de pièces ---
         if self.menu_active:
             self.draw_room_choice_menu(hud_rect)
 
         pygame.display.flip()
 
     # ====================== DESSINS HUD ======================
+
+    
+    def draw_manor(self):
+        # --- 1. Dessiner le manoir ---
+        for y in range(self.ROWS):
+            for x in range(self.COLS):
+                room = self.manor.get_room(x, y)
+                if room:
+                    rect = pygame.Rect(
+                        x * self.cell_size + self.margin,
+                        y * self.cell_size + self.margin,
+                        self.cell_size - 2 * self.margin,
+                        self.cell_size - 2 * self.margin
+                    )
+                    if room.image:
+                        scaled = pygame.transform.scale(room.image, (rect.width, rect.height))
+                        self.screen.blit(scaled, rect)
+                    else:
+                        pygame.draw.rect(self.screen, (100, 100, 100), rect)
+
     def draw_door_selector(self, px, py):
         """Dessine la barre blanche autour de la porte sélectionnée."""
         x = px * self.cell_size
@@ -294,6 +305,23 @@ class Game:
 
             name = self.font_small.render(room.name, True, color)
             self.screen.blit(name, (x + 10, y_img + card_size + 10))
+
+    def add_message(self, text: str):
+        self.messages.append(text)
+        if len(self.messages) > self.max_messages:
+            self.messages.pop(0)
+
+    def draw_messages(self, hud_rect):
+        x = hud_rect.left + 40
+        y = hud_rect.top + 400   # irgendwo unter dem Inventar
+        title = self.font_text.render("Log:", True, self.COLOR_TEXT)
+        self.screen.blit(title, (x, y))
+        y += 30
+
+        for msg in self.messages:
+            surf = self.font_small.render(msg, True, self.COLOR_TEXT)
+            self.screen.blit(surf, (x, y))
+            y += 22
 
 
 # ====================== MAIN ======================
