@@ -78,7 +78,6 @@ class Game:
         while self.running:
             self.handle_events()
             self.check_end_conditions()
-            print(self.player.is_alive)
             self.render()
             self.clock.tick(30)
         pygame.quit()
@@ -160,6 +159,8 @@ class Game:
         # 1) Lose: plus de pas
         if not self.player.is_alive:
             self.end_game("Vous n'avez plus de pas...\nGame Over.")
+        if not self.manor.can_advance():
+            self.end_game("Il n'y a plus de pièces disponibles pour avancer.\nGame Over.")
             return
 
         # 2) Win: joueur dans l'Antechamber

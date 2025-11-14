@@ -396,3 +396,18 @@ class Manor:
         required_door = self.opposite_direction[direction]
         return [r for r in room_catalog if required_door in getattr(r, "doors", [])]
     
+    def can_advance(self):
+        """Checks if there are any possible moves left on the whole grid."""
+        for y in range(self.HEIGHT):
+            for x in range(self.WIDTH):
+                room = self.get_room(x, y)
+                if isinstance(room, Antechamber):
+                    continue
+                if room:
+                    for direction in room.doors:
+                        dx, dy = self.get_direction_offset(direction)
+                        nx, ny = x + dx, y + dy
+                        if self.in_bounds(nx, ny) and not self.get_room(nx, ny):
+                            if self.get_possible_rooms((x, y), direction, self.room_catalog):
+                                return True
+        return False
