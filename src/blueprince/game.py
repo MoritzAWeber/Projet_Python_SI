@@ -1,6 +1,6 @@
 import pygame
 import random
-from .world import Manor
+from .world import Manor, Antechamber
 from .entities import Player
 
 
@@ -75,6 +75,8 @@ class Game:
     def run(self):
         while self.running:
             self.handle_events()
+            self.check_end_conditions()
+            print(self.player.is_alive)
             self.render()
             self.clock.tick(30)
         pygame.quit()
@@ -151,6 +153,22 @@ class Game:
         self.player.move(self.selected_door, self.manor)
         self.menu_active = False
         print(f"Vous avez ajouté la pièce {chosen.name} en ({nx}, {ny})")
+
+    def check_end_conditions(self):
+        # 1) Lose: plus de pas
+        if not self.player.is_alive:
+            self.end_game("Vous n'avez plus de pas...\nGame Over.")
+            return
+
+        # 2) Win: joueur dans l'Antechamber
+        x, y = self.player.position
+        current_room = self.manor.get_room(x, y)
+        if isinstance(current_room, Antechamber):
+            self.end_game("Bravo ! Vous avez atteint l'Antechamber. Vous gagnez !")
+
+    def end_game(self, message: str):
+        print(message)
+        self.running = False
 
     # ====================== AFFICHAGE ======================
     def render(self):

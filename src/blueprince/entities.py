@@ -30,7 +30,7 @@ class Player:
     def perdre_pas(self, quantite=1):
         """Appelée quand le joueur bouge."""
         self.pas -= quantite
-        if self.pas <= 0:
+        if not self.a_des_pas():
             self.pas = 0
             self.is_alive = False # Le joueur perd s'il n'a plus de pas !
             print("Vous n'avez plus de pas! Game Over.")
@@ -38,6 +38,8 @@ class Player:
     def gagner_pas(self, quantite):
         """Appelée quand le joueur mange une pomme, par exemple."""
         self.pas += quantite
+        if self.a_des_pas():
+            self.is_alive = True  # Le joueur peut revivre s'il regagne des pas
         print(f"Vous gagnez {quantite} pas. Total: {self.pas}") 
 
     def can_move(self, direction, manor):
@@ -61,16 +63,21 @@ class Player:
 
     def move(self, direction, manor):
         """Déplace le joueur si les portes sont compatibles entre les deux salles."""
+        
+        if not self.a_des_pas():
+            print("Vous n'avez plus de pas pour vous déplacer.")
+            return
+
         x, y = self.position
         current_room = manor.get_room(x, y)
 
         if not current_room:
-            print("❌ Vous n’êtes dans aucune pièce.")
+            print("Vous n’êtes dans aucune pièce.")
             return
 
         # 1️⃣ Vérifier qu'il y a une porte dans cette direction depuis la pièce actuelle
         if direction not in current_room.doors:
-            print(f"🚫 Pas de porte vers {direction} dans {current_room.name}.")
+            print(f"Pas de porte vers {direction} dans {current_room.name}.")
             return
 
         # 2️⃣ Calculer la position de la pièce voisine
@@ -86,11 +93,6 @@ class Player:
 
         nx, ny = x + dx, y + dy
 
-        # Vérifier si la position est valide
-        if not manor.in_bounds(nx, ny):
-            print("Impossible de sortir du manoir.")
-            return
-
         next_room = manor.get_room(nx, ny)
         if not next_room:
             print("Il n’y a pas encore de pièce dans cette direction.")
@@ -104,7 +106,7 @@ class Player:
 
         # 4️⃣ Déplacement autorisé
         self.position = [nx, ny]
-        self.pas -= 1
+        self.perdre_pas(1)  # Perdre un pas à chaque déplacement
         print(f"Vous êtes maintenant dans {next_room.name}. ({self.pas} pas restants)")
 
 
