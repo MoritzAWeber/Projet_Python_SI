@@ -87,7 +87,6 @@ class Chapel(Room):
             rarity=2
         )
     def apply_effect_on_enter(self, player):
-        print(f"Effet '{self.name}': +10 pas.")
         player.gagner_pas(10)
 
 class Kitchen(Room):
@@ -175,7 +174,6 @@ class Furnace(Room):
             placement_condition="center"
         )
     def apply_effect_on_enter(self, player):
-        print("🔥 Fournaise : vous perdez 5 pas.")
         player.perdre_pas(5)
 
 class Greenhouse(Room):
@@ -306,9 +304,7 @@ class Manor:
 
         # Placement fixe du Hall d'entrée et de l'Antechamber
         self.place_room(2, 8, EntranceHall())
-        print("Pièce de départ 'EntranceHall' placée en (2, 8).")
         self.place_room(2, 0, Antechamber())
-        print("Pièce de fin 'Antechamber' placée en (2, 0).")
 
     def in_bounds(self, x, y):
         return 0 <= x < self.WIDTH and 0 <= y < self.HEIGHT
@@ -372,10 +368,6 @@ class Manor:
 
         random.shuffle(choices)
         
-        print("Tirage de pièces compatibles :")
-        for r in choices:
-            print(f" - {r.name} | portes: {r.doors} | condition: {r.placement_condition}")
-
         return choices
     
     def get_direction_offset(self, direction):

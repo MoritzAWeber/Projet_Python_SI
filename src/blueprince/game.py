@@ -78,12 +78,19 @@ class Game:
         self.pickup_menu_active = False
         self.pickup_index = 0
         self.pickup_choices = []
+        # === Game over state ===
+        self.game_over = False
+        self.game_over_message = ""
+        # === Victory state ===
+        self.victory = False
+        self.victory_message = ""
 
     # ====================== BOUCLE PRINCIPALE ======================
     def run(self):
         while self.running:
             self.handle_events()
-            self.check_end_conditions()
+            if not self.game_over:
+                self.check_end_conditions()
             self.render()
             self.clock.tick(30)
         pygame.quit()
@@ -97,6 +104,12 @@ class Game:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
+
+                # If game over or victory: only allow restart or exit
+                if self.game_over or self.victory:
+                    if event.key == pygame.K_r:
+                        self.restart_game()
+                    continue
 
                 # ---- Navigation principale ----
                 if not self.menu_active and not self.pickup_menu_active:
@@ -222,7 +235,7 @@ class Game:
         self.manor.place_room(nx, ny, chosen)
         self.player.move(self.selected_door, self.manor)
         self.menu_active = False
-        print(f"Vous avez ajouté la pièce {chosen.name} en ({nx}, {ny})")
+        self.add_message(f"Pièce ajoutée: {chosen.name}")
 
     def open_object_pickup_menu(self):
         x, y = self.player.position
@@ -262,11 +275,37 @@ class Game:
         x, y = self.player.position
         current_room = self.manor.get_room(x, y)
         if isinstance(current_room, Antechamber):
-            self.end_game("Bravo ! Vous avez atteint l'Antechamber. Vous gagnez !")
+            self.set_victory("Bravo ! Vous avez atteint l'Antechamber. Vous gagnez !")
 
     def end_game(self, message: str):
-        print(message)
-        self.running = False
+        self.game_over = True
+        self.game_over_message = message
+        # Also push a concise last message into log
+        self.add_message("GAME OVER")
+
+    def set_victory(self, message: str):
+        self.victory = True
+        self.victory_message = message
+        self.add_message("VICTOIRE !")
+
+    def restart_game(self):
+        # Reinitialize dynamic game state (keep window & pygame)
+        self.manor = Manor()
+        self.player = Player("Raouf")
+        self.player.set_message_callback(self.add_message)
+        self.selected_door = "up"
+        self.menu_active = False
+        self.menu_choices = []
+        self.menu_index = 0
+        self.pickup_menu_active = False
+        self.pickup_index = 0
+        self.pickup_choices = []
+        self.messages.clear()
+        self.game_over = False
+        self.game_over_message = ""
+        self.victory = False
+        self.victory_message = ""
+        self.add_message("Nouvelle partie")
 
     # ====================== AFFICHAGE ======================
     def render(self):
@@ -307,6 +346,11 @@ class Game:
         # --- 8. Objets dans la pièce actuelle ---
         if not self.menu_active:
             self.draw_room_objects(hud_rect)
+
+        if self.victory:
+            self.draw_victory_overlay()
+        elif self.game_over:
+            self.draw_game_over_overlay()
 
         pygame.display.flip()
 
@@ -507,6 +551,74 @@ class Game:
             hint2 = self.font_small.render("UP/DOWN + SPACE: interagir", True, self.COLOR_TEXT)
             y += 22
             self.screen.blit(hint2, (x, y))
+
+    def draw_game_over_overlay(self):
+        # Dark transparent overlay
+        overlay = pygame.Surface((self.window_width, self.window_height))
+        overlay.set_alpha(180)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+
+        panel_w, panel_h = 520, 300
+        panel_x = (self.window_width - panel_w) // 2
+        panel_y = (self.window_height - panel_h) // 2
+        panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
+        pygame.draw.rect(self.screen, (245, 245, 245), panel_rect, border_radius=12)
+        pygame.draw.rect(self.screen, (200, 200, 200), panel_rect, 2, border_radius=12)
+
+        title = self.font_title.render("GAME OVER", True, (180, 40, 40))
+        self.screen.blit(title, (panel_x + (panel_w - title.get_width()) // 2, panel_y + 18))
+
+        # Wrap message lines
+        lines = [l for l in self.game_over_message.split('\n') if l.strip()] or ["Fin de la partie."]
+        y = panel_y + 80
+        for line in lines:
+            surf = self.font_text.render(line, True, self.COLOR_TEXT)
+            self.screen.blit(surf, (panel_x + 30, y))
+            y += 32
+
+        stats = f"Pas: {self.player.pas}  Or: {self.player.or_}  Gemmes: {self.player.gemmes}  Clés: {self.player.cles}"
+        stats_surf = self.font_small.render(stats, True, (70, 70, 80))
+        self.screen.blit(stats_surf, (panel_x + 30, panel_y + panel_h - 100))
+
+        instr1 = self.font_small.render("R: recommencer", True, self.COLOR_TEXT)
+        instr2 = self.font_small.render("ESC: quitter", True, self.COLOR_TEXT)
+        self.screen.blit(instr1, (panel_x + 30, panel_y + panel_h - 60))
+        self.screen.blit(instr2, (panel_x + 30, panel_y + panel_h - 30))
+
+    def draw_victory_overlay(self):
+        # Dark transparent overlay
+        overlay = pygame.Surface((self.window_width, self.window_height))
+        overlay.set_alpha(150)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+
+        panel_w, panel_h = 560, 320
+        panel_x = (self.window_width - panel_w) // 2
+        panel_y = (self.window_height - panel_h) // 2
+        panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
+        pygame.draw.rect(self.screen, (235, 245, 235), panel_rect, border_radius=14)
+        pygame.draw.rect(self.screen, (120, 180, 120), panel_rect, 3, border_radius=14)
+
+        title = self.font_title.render("VICTOIRE !", True, (30, 140, 30))
+        self.screen.blit(title, (panel_x + (panel_w - title.get_width()) // 2, panel_y + 18))
+
+        # Wrap message lines
+        lines = [l for l in self.victory_message.split('\n') if l.strip()] or ["Partie gagnée !"]
+        y = panel_y + 80
+        for line in lines:
+            surf = self.font_text.render(line, True, self.COLOR_TEXT)
+            self.screen.blit(surf, (panel_x + 30, y))
+            y += 32
+
+        stats = f"Pas: {self.player.pas}  Or: {self.player.or_}  Gemmes: {self.player.gemmes}  Clés: {self.player.cles}"
+        stats_surf = self.font_small.render(stats, True, (60, 90, 60))
+        self.screen.blit(stats_surf, (panel_x + 30, panel_y + panel_h - 110))
+
+        instr1 = self.font_small.render("R: recommencer", True, self.COLOR_TEXT)
+        instr2 = self.font_small.render("ESC: quitter", True, self.COLOR_TEXT)
+        self.screen.blit(instr1, (panel_x + 30, panel_y + panel_h - 70))
+        self.screen.blit(instr2, (panel_x + 30, panel_y + panel_h - 40))
 
 
 
