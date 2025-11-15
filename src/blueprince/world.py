@@ -44,7 +44,7 @@ class Room(ABC):
             image=pygame.transform.rotate(self.image, -90 * num_rotations) if self.image else None,
             doors=rotated_doors,
             gem_cost=self.gem_cost,
-            objets=self.objets,  # Share same objects (shouldn't be modified during tirage)
+            objets=self.objets.copy(),
             rarity=self.rarity,
             placement_condition=self.placement_condition
         )
@@ -333,7 +333,7 @@ class Manor:
         self.room_catalog = [
             r for r in ROOM_CATALOG if r.name not in ("EntranceHall", "Antechamber")
         ]
-        self.pioche = list(self.room_catalog)
+        self.pioche = self.room_catalog
 
         # Placement fixe du Hall d'entrée et de l'Antechamber
         self.place_room(2, 8, EntranceHall())

@@ -142,6 +142,8 @@ class Game:
                         self.menu_index = (self.menu_index + 1) % len(self.menu_choices)
                     elif event.key == pygame.K_SPACE:
                         self.confirm_room_choice()
+                    elif event.key == pygame.K_r:
+                        self.reroll_room_choices()
                 
                 # ---- Ramasser des objets ----
                 elif self.pickup_menu_active:
@@ -223,6 +225,31 @@ class Game:
 
         self.menu_index = 0
         self.menu_active = True
+
+    def reroll_room_choices(self):
+        """Benutzt einen Würfel um die 3 Raumoptionen neu zu würfeln."""
+        if self.player.des <= 0:
+            self.add_message("Vous n'avez pas de dés pour relancer!")
+            return
+        
+        # Würfel verbrauchen
+        self.player.des -= 1
+        self.add_message(f"Vous utilisez un dé pour relancer. Dés restants: {self.player.des}")
+        
+        # Neue 3 Räume ziehen
+        self.menu_choices = self.manor.draw_three_rooms(
+            self.player.position, 
+            self.selected_door, 
+            self.manor.pioche
+        )
+        
+        if not self.menu_choices:
+            self.add_message("Erreur: Aucune pièce compatible trouvée après relance!")
+            self.menu_active = False
+            return
+        
+        # Index zurücksetzen
+        self.menu_index = 0
 
     def confirm_room_choice(self):
         """Valide le choix de la pièce et la place dans le manoir."""
@@ -463,6 +490,18 @@ class Game:
 
             name = self.font_small.render(room.name, True, color)
             self.screen.blit(name, (x + 10, y_img + card_size + 10))
+        
+        # Reroll-Anzeige
+        reroll_y = y_img + card_size + 50
+        if self.player.des > 0:
+            reroll_text = f"[R] Relancer ({self.player.des} dés disponibles)"
+            reroll_color = (0, 150, 0)
+        else:
+            reroll_text = "[R] Relancer (pas de dés)"
+            reroll_color = (150, 150, 150)
+        
+        reroll_surf = self.font_small.render(reroll_text, True, reroll_color)
+        self.screen.blit(reroll_surf, (base_x, reroll_y))
 
     def add_message(self, text: str):
         self.messages.append(text)

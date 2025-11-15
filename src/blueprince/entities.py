@@ -65,7 +65,7 @@ class Player:
         for obj in room.objets:
             if obj.nom in step_giving_items:
                 return True
-        
+
         return False
 
     def gagner_pas(self, quantite):
