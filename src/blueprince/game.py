@@ -1,7 +1,7 @@
 import pygame
 import random
 from .world import Manor, Antechamber
-from .entities import Player, ObjetConsommable
+from .entities import Player, ObjetConsommable, ObjetPermanent, AutreObjet
 
 
 class Game:
@@ -20,7 +20,7 @@ class Game:
         self.cell_size = 90
         self.margin = 5
         self.messages = []
-        self.max_messages = 5
+        self.max_messages = 1
 
         self.game_width = self.COLS * self.cell_size
         self.hud_width = int(self.cell_size * 6)
@@ -65,6 +65,7 @@ class Game:
         self.clock = pygame.time.Clock()
         self.manor = Manor()
         self.player = Player("Raouf")
+        self.player.set_message_callback(self.add_message)
         self.running = True
 
         # === Sélecteur de porte + menu ===
@@ -190,9 +191,12 @@ class Game:
         room = self.manor.get_room(x, y)
         if not room:
             return
+        
         chosen.pick_up(self.player)
-        room.objets.remove(chosen)
-        self.add_message(f"Vous avez ramassé : {chosen.nom}")
+
+        if chosen.should_consume_on_pickup():
+            room.objets.remove(chosen)
+            self.add_message(f"Vous avez ramassé et utilisé: {chosen.nom}")
         if not room.objets:
             self.pickup_menu_active = False
 
@@ -376,24 +380,22 @@ class Game:
 
         px, py = self.player.position
         room = self.manor.get_room(px, py)
-        if not room:
+
+        if not room or not room.objets:
             return
 
         title = self.font_text.render("Objets dans la pièce:", True, self.COLOR_TEXT)
         self.screen.blit(title, (x, y))
         y += 30
 
-        if not room.objets:
-            return
-
         if not self.pickup_menu_active:
             for i, obj in enumerate(room.objets, start=1):
                 if isinstance(obj, ObjetConsommable):
-                    line = self.font_small.render(f"{i}. Pick up {obj.nom} x {obj.valeur}", True, self.COLOR_TEXT)
+                    line = self.font_small.render(f"{i}. {obj.nom} x {obj.valeur}", True, self.COLOR_TEXT)
                     self.screen.blit(line, (x, y))
                     y += 22
                 else:
-                    line = self.font_small.render(f"{i}. Pick up {obj.nom}", True, self.COLOR_TEXT)
+                    line = self.font_small.render(f"{i}. {obj.nom}", True, self.COLOR_TEXT)
                     self.screen.blit(line, (x, y))
                     y += 22
             hint = self.font_small.render("E: ouvrir le menu", True, self.COLOR_TEXT)
@@ -403,18 +405,42 @@ class Game:
 
             for i, obj in enumerate(room.objets, start=1):
                 text_color = (255, 215, 0) if i - 1 == self.pickup_index else self.COLOR_TEXT
+
+                # Construction du texte avec détails
+                display_text = f"{i}. {obj.nom}"
+                
+                # Ajoute des infos spécifiques selon le type
                 if isinstance(obj, ObjetConsommable):
-                    line = self.font_small.render(f"{i}. Pick up {obj.nom} x {obj.valeur}", True, text_color)
-                    self.screen.blit(line, (x, y))
-                    y += 22
-                else:
-                    line = self.font_small.render(f"{i}. Pick up {obj.nom}", True, text_color)
-                    self.screen.blit(line, (x, y))
-                    y += 22
+                    display_text = display_text + f"x{obj.valeur}"
+                # Ajoute le lock level pour les Casiers
+                elif obj.__class__.__name__ == "Casier":
+                    if hasattr(obj, 'already_opened') and obj.already_opened:
+                        display_text += "[Ouvert]"
+                    elif hasattr(obj, 'lock_level'):
+                        if obj.lock_level == 1:
+                            display_text += "[Kit requis]"
+                        elif obj.lock_level == 2:
+                            display_text += "[Clé requise]"
+                # Ajoute l'état pour les Coffres
+                elif obj.__class__.__name__ == "Coffre":
+                    if hasattr(obj, 'already_opened') and obj.already_opened:
+                        display_text += "[Vide]"
+                    else:
+                        display_text += "[Marteau requis]"
+                # Ajoute l'état pour EndroitCreuser
+                elif obj.__class__.__name__ == "EndroitCreuser":
+                    if hasattr(obj, 'already_dug') and obj.already_dug:
+                        display_text += "[Creusé]"
+                    else:
+                        display_text += "[Pelle requise]"
+                line = self.font_small.render(display_text, True, text_color)
+                self.screen.blit(line, (x, y))
+                y += 22
+            
             y += 5
             hint = self.font_small.render("E: fermer le menu", True, self.COLOR_TEXT)
             self.screen.blit(hint, (x, y))
-            hint2 = self.font_small.render("UP/DOWN + SPACE: ramasser", True, self.COLOR_TEXT)
+            hint2 = self.font_small.render("UP/DOWN + SPACE: interagir", True, self.COLOR_TEXT)
             y += 22
             self.screen.blit(hint2, (x, y))
 

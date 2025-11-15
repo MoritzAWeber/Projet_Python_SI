@@ -1,5 +1,6 @@
 # all the entities who will be populating the game
 from abc import ABC, abstractmethod
+import random
 
 
 class Player:
@@ -22,6 +23,16 @@ class Player:
         
         self.is_alive = True    # Utile pour la boucle de jeu principale
         
+        self.message_callback = None  # Callback function for messages
+
+    def set_message_callback(self, callback):
+        self.message_callback = callback
+
+    def add_message(self, message):
+        """Utilise le callback pour ajouter un message au jeu."""
+        if self.message_callback:
+            self.message_callback(message)
+        
         
     def a_des_pas(self):
         """Vérifie s'il reste des pas."""
@@ -33,14 +44,14 @@ class Player:
         if not self.a_des_pas():
             self.pas = 0
             self.is_alive = False # Le joueur perd s'il n'a plus de pas !
-            print("Vous n'avez plus de pas! Game Over.")
+            self.add_message("Vous n'avez plus de pas! Game Over.")
 
     def gagner_pas(self, quantite):
         """Appelée quand le joueur mange une pomme, par exemple."""
         self.pas += quantite
         if self.a_des_pas():
             self.is_alive = True  # Le joueur peut revivre s'il regagne des pas
-        print(f"Vous gagnez {quantite} pas. Total: {self.pas}") 
+        self.add_message(f"Vous gagnez {quantite} pas. Total: {self.pas}") 
 
     def can_move(self, direction, manor):
         """Checks if movement in direction is possible."""
@@ -65,19 +76,19 @@ class Player:
         """Déplace le joueur si les portes sont compatibles entre les deux salles."""
         
         if not self.a_des_pas():
-            print("Vous n'avez plus de pas pour vous déplacer.")
+            self.add_message("Vous n'avez plus de pas pour vous déplacer.")
             return
 
         x, y = self.position
         current_room = manor.get_room(x, y)
 
         if not current_room:
-            print("Vous n’êtes dans aucune pièce.")
+            self.add_message("Vous n’êtes dans aucune pièce.")
             return
 
         # 1️⃣ Vérifier qu'il y a une porte dans cette direction depuis la pièce actuelle
         if direction not in current_room.doors:
-            print(f"Pas de porte vers {direction} dans {current_room.name}.")
+            self.add_message(f"Pas de porte vers {direction} dans {current_room.name}.")
             return
 
         # 2️⃣ Calculer la position de la pièce voisine
@@ -95,19 +106,19 @@ class Player:
 
         next_room = manor.get_room(nx, ny)
         if not next_room:
-            print("Il n’y a pas encore de pièce dans cette direction.")
+            self.add_message("Il n’y a pas encore de pièce dans cette direction.")
             return
 
         # 3️⃣ Vérifier la porte opposée dans la pièce d'arrivée
         opposite = {"up": "down", "down": "up", "left": "right", "right": "left"}
         if opposite[direction] not in next_room.doors:
-            print(f"{next_room.name} n’a pas de porte vers {opposite[direction]}.")
+            self.add_message(f"{next_room.name} n’a pas de porte vers {opposite[direction]}.")
             return
 
         # 4️⃣ Déplacement autorisé
         self.position = [nx, ny]
         self.perdre_pas(1)  # Perdre un pas à chaque déplacement
-        print(f"Vous êtes maintenant dans {next_room.name}. ({self.pas} pas restants)")
+        self.add_message(f"Vous êtes maintenant dans {next_room.name}. ({self.pas} pas restants)")
 
     def use_item(self, item_name, player):
         for item in self.inventory.consumables:
@@ -138,7 +149,14 @@ class Inventory:
                 self.consumables.remove(item)
                 return
 
-        print(f"{item_name} not found in inventory.")
+        player.add_message(f"{item_name} not found in inventory.")
+    
+    def has_permanent(self, item_name):
+        """Check if player has a specific permanent item"""
+        for item in self.permanents:
+            if item.nom.lower() == item_name.lower():
+                return True
+        return False
 
 
 class Objet(ABC):
@@ -164,6 +182,10 @@ class ObjetConsommable(Objet):
         """Applique l'effet de l'objet sur le joueur"""
         pass
 
+    def should_consume_on_pickup(self):
+        """Détermine si l'objet doit être consommé immédiatement après la collecte."""
+        return True
+
 
 class Pas(ObjetConsommable):
     """Représente le nombre de pas disponibles"""
@@ -181,7 +203,7 @@ class Or(ObjetConsommable):
 
     def pick_up(self, player):
         player.or_ += self.valeur
-        print(f"Le joueur obtient {self.valeur} pieces d'or")
+        player.add_message(f"Le joueur obtient {self.valeur} pieces d'or")
 
 
 class Gemmes(ObjetConsommable):
@@ -191,7 +213,7 @@ class Gemmes(ObjetConsommable):
 
     def pick_up(self, player):
         player.gemmes += self.valeur
-        print(f"Le joueur obtient {self.valeur} gemmes.")
+        player.add_message(f"Le joueur obtient {self.valeur} gemmes.")
 
 
 class Cles(ObjetConsommable):
@@ -201,17 +223,17 @@ class Cles(ObjetConsommable):
 
     def pick_up(self, player):
         player.cles += self.valeur
-        print(f"Le joueur obtient {self.valeur} clé")
+        player.add_message(f"Le joueur obtient {self.valeur} clé")
 
 
 class Des(ObjetConsommable):
     """Dés pour relancer le tirage de pieces"""
-    def __init__(self):
-        super().__init__("Dés", "Permet de relancer un tirage de pieces", 0)
+    def __init__(self, valeur):
+        super().__init__("Dés", "Permet de relancer un tirage de pieces", valeur)
 
     def pick_up(self, player):
-        player.des += 1
-        print("Le joueur obtient un dé")
+        player.des += self.valeur
+        player.add_message("Le joueur obtient un dé")
 
 
 
@@ -223,7 +245,11 @@ class ObjetPermanent(Objet):
 
     def pick_up(self, player):
         player.inventory.add_item(self)
-        print("Le joueur peut maintenant creuser des trous")
+        player.add_message("Le joueur peut maintenant creuser des trous")
+
+    def should_consume_on_pickup(self):
+        """Détermine si l'objet doit être consommé immédiatement après la collecte."""
+        return True
 
 
 
@@ -233,7 +259,7 @@ class Pelle(ObjetPermanent):
         super().__init__("Pelle", "Permet de creuser à certains endroits.")
 
     def appliquer_effet(self, player):
-        print("Le joueur peut maintenant creuser des trous")
+        player.add_message("Le joueur peut maintenant creuser des trous")
 
 
 class Marteau(ObjetPermanent):
@@ -242,7 +268,7 @@ class Marteau(ObjetPermanent):
         super().__init__("Marteau", "Permet d’ouvrir des coffres sans clé")
 
     def appliquer_effet(self, player):
-        print("Le joueur peut ouvrir les coffres sans clé")
+        player.add_message("Le joueur peut ouvrir les coffres sans clé")
 
 
 class KitCrochetage(ObjetPermanent):
@@ -251,7 +277,7 @@ class KitCrochetage(ObjetPermanent):
         super().__init__("Kit de crochetage", "Permet d’ouvrir les portes de niveau 1 sans clé")
 
     def appliquer_effet(self, player):
-        print("Le joueur peut crocheter les portes de niveau 1")
+        player.add_message("Le joueur peut crocheter les portes de niveau 1")
 
 
 class DetecteurMetaux(ObjetPermanent):
@@ -260,7 +286,7 @@ class DetecteurMetaux(ObjetPermanent):
         super().__init__("Détecteur de métaux", "Augmente les chances de trouver des clés et de l'or")
 
     def appliquer_effet(self, player):
-        print("Le joueur augmente ses chances de trouver des objets utiles")
+        player.add_message("Le joueur augmente ses chances de trouver des objets utiles")
 
 
 class PatteLapin(ObjetPermanent):
@@ -269,7 +295,7 @@ class PatteLapin(ObjetPermanent):
         super().__init__("Patte de lapin", "Augmente la chance de trouver des objets rares")
 
     def appliquer_effet(self, player):
-        print("Le joueur devient plus chanceux")
+        player.add_message("Le joueur devient plus chanceux")
 
 
 class AutreObjet(Objet):
@@ -281,6 +307,10 @@ class AutreObjet(Objet):
     def pick_up(self, player):
         pass
 
+    def should_consume_on_pickup(self):
+        """Détermine si l'objet doit être consommé immédiatement après la collecte."""
+        return True
+
 
 
 ##### Autres Objets
@@ -290,7 +320,7 @@ class Pomme(AutreObjet):
         super().__init__("Pomme", "Redonne 2 pas")
 
     def pick_up(self, player):
-        #print("Le joueur regagne 2 pas")
+        #player.add_message("Le joueur regagne 2 pas")
         player.gagner_pas(2) # Appelle la méthode du joueur
 
 
@@ -300,7 +330,7 @@ class Banane(AutreObjet):
         super().__init__("Banane", "Redonne 3 pas")
 
     def pick_up(self, player):
-        #print("Le joueur regagne 3 pas")
+        #player.add_message("Le joueur regagne 3 pas")
         player.gagner_pas(3) #
 
 
@@ -310,7 +340,7 @@ class Gateau(AutreObjet):
         super().__init__("Gâteau", "Redonne 10 pas")
 
     def pick_up(self, player):
-        #print("Le joueur regagne 10 pas")
+        #player.add_message("Le joueur regagne 10 pas")
         player.gagner_pas(10)
 
 
@@ -320,7 +350,7 @@ class Sandwich(AutreObjet):
         super().__init__("Sandwich", "Redonne 15 pas")
 
     def pick_up(self, player):
-        #print("Le joueur regagne 15 pas")
+        #player.add_message("Le joueur regagne 15 pas")
         player.gagner_pas(15)
 
 
@@ -330,7 +360,7 @@ class Repas(AutreObjet):
         super().__init__("Repas", "Redonne 25 pas")
 
     def pick_up(self, player):
-        #print("Le joueur regagne 25 pas")
+        #player.add_message("Le joueur regagne 25 pas")
         player.gagner_pas(25)
 
 
@@ -340,27 +370,131 @@ class Coffre(AutreObjet):
     """Contient des objets peut etre ouvert avec une clé ou un marteau"""
     def __init__(self):
         super().__init__( "Coffre", "Peut contenir des objets aléatoires")
+        self.already_opened = False
 
     def pick_up(self, player):
-        # TODO: Implémenter la logique d'ouverture (clé/marteau) et de loot
-        print("Le joueur ouvre un coffre avec clé ou marteau")
+        """Open chest if player has Marteau"""
+        if player.inventory.has_permanent("Marteau"):
+            # Random reward
+            rewards = [
+                Or(random.randint(3, 8)),
+                Gemmes(random.randint(1, 3)),
+                Cles(1),
+                Des(random.randint(1, 2))
+            ]
+            reward = random.choice(rewards)
+            reward.pick_up(player)
+        elif player.cles > 0:
+            # Random reward
+            rewards = [
+                Or(random.randint(3, 8)),
+                Gemmes(random.randint(1, 3)),
+                Cles(1),
+                Des(random.randint(1, 2))
+            ]
+            reward = random.choice(rewards)
+            reward.pick_up(player)
+            player.cles -= 1
+        else:
+            player.add_message("Vous avez besoin d'un marteau ou un clé pour ouvrir ce coffre.")
+
+
+    def should_consume_on_pickup(self):
+        """Détermine si l'objet doit être consommé immédiatement après la collecte."""
+        return self.already_opened
 
 
 class EndroitCreuser(AutreObjet):
     """Endroit ou le joueur peut creuser avec une pelle"""
     def __init__(self):
         super().__init__("Endroit a creuser", "Peut contenir des objets")
+        self.already_dug = False
 
     def pick_up(self, player):
-        # TODO: Implémenter la logique (vérifier si le joueur a la pelle)
-        print("Le joueur creuse a cet endroit")
+        if self.already_dug:
+            player.add_message("Vous avez déjà creusé ici.")
+            return
+        
+        if player.inventory.has_permanent("Pelle"):
+            player.add_message("Vous creusez avec la pelle...")
+            self.already_dug = True
+            
+            # Chance-based rewards
+            chance = random.random()
+            
+            # DetecteurMetaux improves chances
+            if player.inventory.has_permanent("Détecteur de métaux"):
+                chance += 0.2  # +20% better luck
+                player.add_message("Le détecteur de métaux augmente vos chances!")
+            
+            if chance < 0.3:
+                player.add_message("Vous ne trouvez rien...")
+            elif chance < 0.6:
+                # Small reward
+                reward = random.choice([Or(2), Pas(5)])
+                reward.pick_up(player)
+                player.add_message(f"Vous avez trouvé: {reward.nom}!")
+            else:
+                # Big reward
+                reward = random.choice([Gemmes(2), Cles(1), Or(5)])
+                reward.pick_up(player)
+                player.add_message(f"Vous avez trouvé: {reward.nom}!")
+        else:
+            player.add_message("Vous avez besoin d'une pelle pour creuser ici.")
+
+    def should_consume_on_pickup(self):
+        """Détermine si l'objet doit être consommé immédiatement après la collecte."""
+        return self.already_dug
+
 
 
 class Casier(AutreObjet):
     """Casier du vestiaire contient parfois des objets"""
-    def __init__(self):
+    def __init__(self, locked = True, lock_level = 1):
         super().__init__("Casier", "Present dans le vestiaire peut contenir des objets.")
+        self.locked = locked
+        self.lock_level = lock_level
+        self.already_opened = False
 
     def pick_up(self, player):
-        # TODO: Implémenter la logique (vérifier si le joueur a une clé)
-        print("Le joueur ouvre un casier une clé nécessaire")
+        if self.already_opened:
+            player.add_message("Le casier est déjà vide.")
+            return
+        
+        if not self.locked:
+            self.open_locker(player)
+            return
+        
+        # Level 1 lock: needs Kit de crochetage
+        if self.lock_level == 1:
+            if player.inventory.has_permanent("Kit de crochetage"):
+                player.add_message("Vous crochetez le casier avec le kit!")
+                self.open_locker(player)
+            else:
+                player.add_message("Ce casier nécessite un kit de crochetage.")
+        
+        # Level 2 lock: needs Key
+        elif self.lock_level == 2:
+            if player.cles > 0:
+                player.cles -= 1
+                player.add_message(f"Vous utilisez une clé! (Reste: {player.cles})")
+                self.open_locker(player)
+            else:
+                player.add_message("Ce casier nécessite une clé.")
+
+    def open_locker(self, player):
+        self.already_opened = True
+        # Random reward
+        rewards = [
+            Or(random.randint(1, 5)),
+            Gemmes(random.randint(1, 2)),
+            Pas(random.randint(5, 15))
+        ]
+        reward = random.choice(rewards)
+        reward.pick_up(player)
+        player.add_message(f"Vous avez trouvé: {reward.nom} dans le casier!")
+
+    def should_consume_on_pickup(self):
+        """Détermine si l'objet doit être consommé immédiatement après la collecte."""
+        return self.already_opened
+    

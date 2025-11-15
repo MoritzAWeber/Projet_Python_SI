@@ -3,7 +3,7 @@ import random
 from abc import ABC, abstractmethod
 
 from .entities import (
-    Pomme, Banane, Or, Gemmes, Cles, Des, Pelle, Marteau
+    Pomme, Banane, Or, Gemmes, Cles, Des, Pelle, Marteau, EndroitCreuser
 )
 
 # ==============================
@@ -40,7 +40,8 @@ class EntranceHall(Room):
             name="EntranceHall",
             image=pygame.image.load("assets/rooms/Entrance_Hall.png"),
             doors=["up", "left", "right"],
-            placement_condition="bottom"
+            placement_condition="bottom",
+            objets=[EndroitCreuser()]
         )
 
 class Antechamber(Room):
