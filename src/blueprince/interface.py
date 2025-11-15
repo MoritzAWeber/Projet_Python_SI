@@ -56,7 +56,7 @@ class Game:
         # === Horloge et entités ===
         self.clock = pygame.time.Clock()
         self.manor = Manor()
-        self.player = Player("Raouf")
+        self.player = Player("Player")
         self.running = True
 
     # ====================== BOUCLE PRINCIPALE ======================

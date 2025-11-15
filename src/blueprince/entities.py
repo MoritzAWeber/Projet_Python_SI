@@ -109,6 +109,8 @@ class Player:
         self.perdre_pas(1)  # Perdre un pas à chaque déplacement
         print(f"Vous êtes maintenant dans {next_room.name}. ({self.pas} pas restants)")
 
+        next_room.apply_effect_on_enter(self)
+
     def use_item(self, item_name, player):
         for item in self.inventory.consumables:
             if item.nom.lower() == item_name.lower():

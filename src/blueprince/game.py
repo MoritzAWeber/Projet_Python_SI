@@ -64,7 +64,8 @@ class Game:
         # === Monde et joueur ===
         self.clock = pygame.time.Clock()
         self.manor = Manor()
-        self.player = Player("Raouf")
+        self.player = Player("Player")
+        self.player.manor = self.manor
         self.running = True
 
         # === Sélecteur de porte + menu ===
@@ -171,6 +172,14 @@ class Game:
         self.manor.place_room(nx, ny, chosen)
         self.menu_active = False
         print(f"Vous avez ajouté la pièce {chosen.name} en ({nx}, {ny})")
+
+
+        # LE BONUS de la piece NURSERY
+        if getattr(self.manor, "bonus_on_draft_bedroom", False):
+            if chosen.name in ("Bedroom", "BunkRoom", "GuestBedroom"):
+                self.player.gagner_pas(5)
+                print("Nursery : +5 pas (draft Bedroom).")
+
 
     def open_object_pickup_menu(self):
         x, y = self.player.position
