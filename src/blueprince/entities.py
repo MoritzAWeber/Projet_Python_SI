@@ -143,8 +143,6 @@ class Player:
         self.add_message(f"Vous êtes maintenant dans {next_room.name}. ({self.pas} pas restants)")
         
         # Appliquer l'effet du nouveau salon
-        next_room.apply_effect_on_enter(self, manor)
-
         next_room.apply_effect_on_enter(self)
 
     def use_item(self, item_name, player):

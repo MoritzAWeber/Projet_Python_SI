@@ -74,7 +74,7 @@ class Room(ABC):
         """Effet éventuel déclenché au moment où la pièce est choisie dans le tirage."""
         pass
 
-    def apply_effect_on_enter(self, player, manor=None):
+    def apply_effect_on_enter(self, player):
         pass
 
 

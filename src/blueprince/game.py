@@ -66,7 +66,6 @@ class Game:
         self.manor = Manor()
         self.player = Player("Player")
         self.player.manor = self.manor
-        self.player = Player("Raouf")
         self.player.set_message_callback(self.add_message)
         self.running = True
 
