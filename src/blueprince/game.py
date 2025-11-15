@@ -483,7 +483,7 @@ class Game:
 
     def draw_room_objects(self, hud_rect):
         """Shows the objects in the current Room"""
-        x = hud_rect.left + 200
+        x = hud_rect.left + 280
         y = hud_rect.top + 40
 
         px, py = self.player.position
@@ -492,9 +492,9 @@ class Game:
         if not room or not room.objets:
             return
 
-        title = self.font_text.render("Objets dans la pièce:", True, self.COLOR_TEXT)
+        title = self.font_title.render("Objets:", True, self.COLOR_TEXT)
         self.screen.blit(title, (x, y))
-        y += 30
+        y += 40
 
         if not self.pickup_menu_active:
             for i, obj in enumerate(room.objets, start=1):
@@ -519,7 +519,7 @@ class Game:
                 
                 # Ajoute des infos spécifiques selon le type
                 if isinstance(obj, ObjetConsommable):
-                    display_text = display_text + f"x{obj.valeur}"
+                    display_text = display_text + f" x {obj.valeur}"
                 # Ajoute le lock level pour les Casiers
                 elif obj.__class__.__name__ == "Casier":
                     if hasattr(obj, 'already_opened') and obj.already_opened:

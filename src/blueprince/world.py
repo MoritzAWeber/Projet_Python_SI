@@ -15,13 +15,47 @@ class Room(ABC):
         self.name = name
         self.image = image
         self.doors = doors if doors else []
+        self.original_doors = self.doors.copy()  # Store original door configuration
         self.gem_cost = gem_cost
         self.objets = objets if objets else []
         self.rarity = rarity
         self.placement_condition = placement_condition
+        self.rotation = 0  # Track current rotation (0, 90, 180, 270)
 
     def has_door(self, direction):
         return direction in self.doors
+
+    def create_rotated_copy(self, num_rotations):
+        """Creates a copy of this room rotated by num_rotations * 90 degrees."""
+        if num_rotations == 0:
+            return self  # No rotation needed, return self
+        
+        # Manually create a new room instance with rotated attributes
+        rotated_doors = self.original_doors.copy()
+        
+        # Apply rotation num_rotations times
+        for _ in range(num_rotations):
+            rotation_map = {"up": "right", "right": "down", "down": "left", "left": "up"}
+            rotated_doors = [rotation_map[d] for d in rotated_doors]
+        
+        # Create new room with rotated properties
+        rotated = Room(
+            name=self.name,
+            image=pygame.transform.rotate(self.image, -90 * num_rotations) if self.image else None,
+            doors=rotated_doors,
+            gem_cost=self.gem_cost,
+            objets=self.objets,  # Share same objects (shouldn't be modified during tirage)
+            rarity=self.rarity,
+            placement_condition=self.placement_condition
+        )
+        rotated.rotation = (num_rotations * 90) % 360
+        rotated.original_doors = self.original_doors.copy()
+        
+        return rotated
+    
+    def get_all_rotations(self):
+        """Returns a list of all possible rotations of this room."""
+        return [self.create_rotated_copy(i) for i in range(4)]
 
     def apply_effect_on_choose(self, player):
         pass
@@ -41,8 +75,7 @@ class EntranceHall(Room):
             image=pygame.image.load("assets/rooms/Entrance_Hall.png"),
             doors=["up", "left", "right"],
             placement_condition="bottom",
-            # Start room now provides a shovel so the player can dig here immediately
-            objets=[Pelle(), EndroitCreuser()]
+            objets=[]
         )
 
 class Antechamber(Room):
@@ -234,7 +267,7 @@ class BoilerRoom(Room):
         super().__init__(
             name="Boiler Room",
             image=pygame.image.load("assets/rooms/Boiler_Room.png"),
-            doors=["left", "down", "down"],
+            doors=["left", "down", "right"],
             rarity=2,
             placement_condition="center"
         )
@@ -318,57 +351,73 @@ class Manor:
         if not self.in_bounds(x, y):
             raise ValueError("Position hors limites.")
         self.grid[y][x] = room
+        
+        # Remove the original room from room_catalog (not rotated copies)
+        # Find the original room by name in the catalog
+        for catalog_room in self.room_catalog[:]:  # Use slice to iterate over copy
+            if catalog_room.name == room.name:
+                self.room_catalog.remove(catalog_room)
+                break
 
     def draw_three_rooms(self, current_pos, direction, room_catalog):
         """
         Tire 3 pièces compatibles selon la position du joueur et la direction choisie.
-        - Respecte les portes compatibles
+        - Respecte les portes compatibles (avec rotation)
         - Évite les murs du manoir
         - Pas de doublons dans le tirage
         - Garantit une pièce gratuite
         """
         x, y = current_pos
-        possible_rooms = self.get_possible_rooms(current_pos, direction, room_catalog)
+        dx, dy = self.get_direction_offset(direction)
+        nx, ny = x + dx, y + dy
+        
+        # Get all possible room rotations that match the required door
+        required_door = self.opposite_direction[direction]
+        possible_rooms = []
+        
+        for room in room_catalog:
+            # Try all rotations of each room
+            for rotated_room in room.get_all_rotations():
+                if required_door in rotated_room.doors:
+                    # Check placement condition on TARGET position (nx, ny)
+                    cond = rotated_room.placement_condition
+                    
+                    if cond == "edge" and not (nx in (0, self.WIDTH - 1) or ny in (0, self.HEIGHT - 1)):
+                        continue
+                    if cond == "center" and (nx in (0, self.WIDTH - 1) or ny in (0, self.HEIGHT - 1)):
+                        continue
+                    if cond == "top" and ny != 0:
+                        continue
+                    if cond == "bottom" and ny != self.HEIGHT - 1:
+                        continue
+                    
+                    possible_rooms.append(rotated_room)
+                    break  # Only add one rotation per room to avoid duplicates
 
-        # Filter by placement conditions
-        filtered_rooms = []
-        for room in possible_rooms:
-            cond = room.placement_condition
-            
-            # Check placement conditions
-            if cond == "edge" and not (x in (0, self.WIDTH - 1) or y in (0, self.HEIGHT - 1)):
-                continue
-            if cond == "center" and (x in (0, self.WIDTH - 1) or y in (0, self.HEIGHT - 1)):
-                continue
-            if cond == "top" and y != 0:
-                continue
-            if cond == "bottom" and y != self.HEIGHT - 1:
-                continue
-                
-            filtered_rooms.append(room)
+        # If no compatible rooms, return empty (should not happen normally)
+        if not possible_rooms:
+            return []
 
-        # 4️ S'il n'y a aucune pièce compatible, proposer toute la pioche
-        if not filtered_rooms:
-            possible_rooms = self.pioche.copy()
-
-        # 5️ Tirage sans doublons et avec au moins une pièce gratuite
-        free_rooms = [r for r in filtered_rooms if r.gem_cost == 0]
+        # Separate free and paid rooms
+        free_rooms = [r for r in possible_rooms if r.gem_cost == 0]
+        paid_rooms = [r for r in possible_rooms if r.gem_cost > 0]
+        
         choices = []
 
         # Forcer au moins une gratuite
         if free_rooms:
             choices.append(random.choice(free_rooms))
-
-        remaining = [r for r in filtered_rooms if r not in choices]
-
-        # Tirer les autres sans doublons
+        
+        # Add up to 2 more rooms (can be free or paid)
+        remaining = [r for r in possible_rooms if r not in choices]
         num_to_draw = min(2, len(remaining))
         if num_to_draw > 0:
             choices.extend(random.sample(remaining, num_to_draw))
-
+        
+        # If we have less than 3 choices, fill with what we have
         random.shuffle(choices)
         
-        return choices
+        return choices[:3]  # Return maximum 3 rooms
     
     def get_direction_offset(self, direction):
         """Returns (dx, dy) for given direction."""
