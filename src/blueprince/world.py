@@ -3,7 +3,7 @@ import random
 from abc import ABC, abstractmethod
 
 from .entities import (
-    Pomme, Banane, Or, Gemmes, Cles, Des, Pelle, Marteau
+    Pomme, Banane, Or, Gemmes, Cles, Des, Pelle, Marteau, EndroitCreuser
 )
 
 
@@ -55,7 +55,9 @@ class EntranceHall(Room):
             image=pygame.image.load("assets/rooms/Blue/Entrance_Hall.png"),
             doors=["up", "left", "right"],
             placement_condition="bottom",
-            color="blue"
+            color="blue",
+            # Start room now provides a shovel so the player can dig here immediately
+            objets=[Pelle(), EndroitCreuser()]
         )
 
 
@@ -985,9 +987,7 @@ class Manor:
 
         # Placement fixe du Hall d'entrée et de l'Antechamber
         self.place_room(2, 8, EntranceHall())
-        print("Pièce de départ 'EntranceHall' placée en (2, 8).")
         self.place_room(2, 0, Antechamber())
-        print("Pièce de fin 'Antechamber' placée en (2, 0).")
 
     # ---------------- utilitaires de grille ----------------
     def in_bounds(self, x, y):
@@ -1085,6 +1085,7 @@ class Manor:
         for r in choices:
             print(f" - {r.name} | portes: {r.doors} | condition: {r.placement_condition} | coût gemmes: {r.gem_cost}")
 
+        
         return choices
 
     # ---------------- directions / déplacements ----------------
