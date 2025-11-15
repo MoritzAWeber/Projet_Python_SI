@@ -18,7 +18,7 @@ class Player:
         self.pas = 70       # Le joueur commence avec 70 pas    
         self.or_ = 0            
         self.gemmes = 2         # Commence avec 2
-        self.cles = 0           # Commence avec 0 
+        self.cles = 10           # Commence avec 0 
         self.des = 0            # Commence avec 0 
         
         self.is_alive = True    # Utile pour la boucle de jeu principale
@@ -109,13 +109,13 @@ class Player:
             self.add_message("Il n’y a pas encore de pièce dans cette direction.")
             return
 
-        # 3️⃣ Vérifier la porte opposée dans la pièce d'arrivée
+        # 3- Vérifier la porte opposée dans la pièce d'arrivée
         opposite = {"up": "down", "down": "up", "left": "right", "right": "left"}
         if opposite[direction] not in next_room.doors:
             self.add_message(f"{next_room.name} n’a pas de porte vers {opposite[direction]}.")
             return
 
-        # 4️⃣ Déplacement autorisé
+        # 4️-  Déplacement autorisé
         self.position = [nx, ny]
         self.perdre_pas(1)  # Perdre un pas à chaque déplacement
         self.add_message(f"Vous êtes maintenant dans {next_room.name}. ({self.pas} pas restants)")

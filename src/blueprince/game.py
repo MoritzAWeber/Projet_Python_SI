@@ -1,7 +1,7 @@
 import pygame
 import random
 from .world import Manor, Antechamber
-from .entities import Player, ObjetConsommable, ObjetPermanent, AutreObjet
+from .entities import Player, ObjetConsommable, ObjetPermanent, AutreObjet, KitCrochetage
 
 
 class Game:
@@ -74,11 +74,6 @@ class Game:
         self.menu_choices = []
         self.menu_index = 0
 
-        # === Ramasser des objets ===
-        self.pickup_menu_active = False
-        self.pickup_index = 0
-        self.pickup_choices = []
-
     # ====================== BOUCLE PRINCIPALE ======================
     def run(self):
         while self.running:
@@ -99,7 +94,7 @@ class Game:
                     self.running = False
 
                 # ---- Navigation principale ----
-                if not self.menu_active and not self.pickup_menu_active:
+                if not self.menu_active:
                     if event.key in (pygame.K_z, pygame.K_w):
                         self.player.move("up", self.manor)
                     elif event.key == pygame.K_s:
@@ -118,11 +113,9 @@ class Game:
                         self.selected_door = "right"
                     elif event.key == pygame.K_SPACE:
                         self.open_door_menu()
-                    elif event.key == pygame.K_e:
-                        self.open_object_pickup_menu()
 
                 # ---- Menu actif ----
-                elif self.menu_active:
+                else:
                     if event.key == pygame.K_LEFT:
                         self.menu_index = (self.menu_index - 1) % len(self.menu_choices)
                     elif event.key == pygame.K_RIGHT:
@@ -130,18 +123,7 @@ class Game:
                     elif event.key == pygame.K_SPACE:
                         self.confirm_room_choice()
 
-                # ---- Ramasser des objets ----
-                elif self.pickup_menu_active:
-                    if event.key == pygame.K_UP:
-                        self.pickup_index = (self.pickup_index - 1) % len(self.pickup_choices)
-                    elif event.key == pygame.K_DOWN:
-                        self.pickup_index = (self.pickup_index + 1) % len(self.pickup_choices)
-                    elif event.key == pygame.K_SPACE:
-                        self.confirm_pickup_choice()
-                    elif event.key == pygame.K_e:
-                        self.pickup_menu_active = False
-
-    # ====================== LOGIQUE DU JEU ======================
+    # la gestion des niveau des portes 
     def open_door_menu(self):
         
         if not self.player.can_move(self.selected_door, self.manor):
@@ -152,12 +134,62 @@ class Game:
         dx, dy = self.manor.get_direction_offset(self.selected_door)
         nx, ny = x + dx, y + dy
 
+        # 1. Vérifier si on se déplace vers une pièce EXISTANTE ---
         if self.manor.get_room(nx, ny):
+            # La porte est déjà "ouverte", pas besoin de clé
             self.player.move(self.selected_door, self.manor)
             return
         
-        # Tirage aléatoire de 3 pièces disponibles
+        # 2. Si c'est une NOUVELLE porte, déterminer le niveau de verrouillage ---
+        # Le niveau dépend de la rangée de destination (ny)
+        # Rappel : 0 est en haut (Antechamber), 8 est en bas (Départ)
+        lock_level = 0
+        
+        # Logique basée sur votre demande (en partant du bas, row 8)
+        if ny in [8, 7, 6]:    # 3 premières rangées (0-clé)
+            lock_level = 0
+        elif ny in [5, 4]:     # 2 rangées suivantes (1-clé)
+            lock_level = 1
+        elif ny in [3, 2]:     # 2 rangées suivantes (1 ou 2 clés)
+            lock_level = random.choice([1, 2])
+        elif ny in [1, 0]:     # 2 dernières rangées (2-clés)
+            lock_level = 2
+
+        # 3. Vérifier si le joueur a le Kit de Crochetage (PDF 2.6) ---
+        has_lockpick = any(isinstance(obj, KitCrochetage) for obj in self.player.inventory.permanents)
+
+        # 4. Déterminer les clés requises et vérifier le paiement ---
+        required_keys = lock_level
+        msg = ""
+
+        if lock_level == 1 and has_lockpick:
+            required_keys = 0  # Le kit ouvre le Niv 1 gratuitement
+            msg = "Vous crochetez la serrure (Niv 1)."
+        elif lock_level == 2:
+            required_keys = 2  # Le kit n'ouvre pas le Niv 2
+        
+        if self.player.cles < required_keys:
+            self.add_message(f"Porte verrouillée ! (Niv {lock_level})")
+            if required_keys > 0:
+                self.add_message(f"Il vous faut {required_keys} clé.")
+            return # Le joueur ne peut pas ouvrir
+        
+        # 5. Payer le coût en clés ---
+        if required_keys > 0:
+            self.player.cles -= required_keys
+            self.add_message(f"Vous utilisez {required_keys} clé.")
+        
+        if msg: # Affiche le message de crochetage
+            self.add_message(msg)
+
+        # 6. Si tout est bon, ouvrir le menu de tirage ---
         self.menu_choices = self.manor.draw_three_rooms(self.player.position, self.selected_door, self.manor.pioche)
+        
+        if not self.menu_choices:
+             self.add_message("eerreur : Aucune pièce compatible trouvée !")
+             # (On pourrait redonner les clés ici si nécessaire)
+             return
+
         self.menu_index = 0
         self.menu_active = True
 
@@ -170,6 +202,7 @@ class Game:
         nx, ny = x + dx, y + dy
 
         self.manor.place_room(nx, ny, chosen)
+        self.player.move(self.selected_door, self.manor)
         self.menu_active = False
         print(f"Vous avez ajouté la pièce {chosen.name} en ({nx}, {ny})")
 
@@ -199,6 +232,7 @@ class Game:
             self.add_message(f"Vous avez ramassé et utilisé: {chosen.nom}")
         if not room.objets:
             self.pickup_menu_active = False
+        print(f"vous avez ajouté la pièce {chosen.name} en ({nx}, {ny})")
 
     def check_end_conditions(self):
         # 1) Lose: plus de pas
@@ -253,10 +287,6 @@ class Game:
         # --- 7. Menu de choix de pièces ---
         if self.menu_active:
             self.draw_room_choice_menu(hud_rect)
-
-        # --- 8. Objets dans la pièce actuelle ---
-        if not self.menu_active:
-            self.draw_room_objects(hud_rect)
 
         pygame.display.flip()
 
