@@ -74,6 +74,11 @@ class Game:
         self.menu_choices = []
         self.menu_index = 0
 
+        # === Ramasser des objets ===
+        self.pickup_menu_active = False
+        self.pickup_index = 0
+        self.pickup_choices = []
+
     # ====================== BOUCLE PRINCIPALE ======================
     def run(self):
         while self.running:
@@ -94,7 +99,7 @@ class Game:
                     self.running = False
 
                 # ---- Navigation principale ----
-                if not self.menu_active:
+                if not self.menu_active and not self.pickup_menu_active:
                     if event.key in (pygame.K_z, pygame.K_w):
                         self.player.move("up", self.manor)
                     elif event.key == pygame.K_s:
@@ -113,15 +118,28 @@ class Game:
                         self.selected_door = "right"
                     elif event.key == pygame.K_SPACE:
                         self.open_door_menu()
+                    elif event.key == pygame.K_e:
+                        self.open_object_pickup_menu()
 
                 # ---- Menu actif ----
-                else:
+                elif self.menu_active:
                     if event.key == pygame.K_LEFT:
                         self.menu_index = (self.menu_index - 1) % len(self.menu_choices)
                     elif event.key == pygame.K_RIGHT:
                         self.menu_index = (self.menu_index + 1) % len(self.menu_choices)
                     elif event.key == pygame.K_SPACE:
                         self.confirm_room_choice()
+                
+                # ---- Ramasser des objets ----
+                elif self.pickup_menu_active:
+                    if event.key == pygame.K_UP:
+                        self.pickup_index = (self.pickup_index - 1) % len(self.pickup_choices)
+                    elif event.key == pygame.K_DOWN:
+                        self.pickup_index = (self.pickup_index + 1) % len(self.pickup_choices)
+                    elif event.key == pygame.K_SPACE:
+                        self.confirm_pickup_choice()
+                    elif event.key == pygame.K_e:
+                        self.pickup_menu_active = False
 
     # la gestion des niveau des portes 
     def open_door_menu(self):
@@ -232,7 +250,6 @@ class Game:
             self.add_message(f"Vous avez ramassé et utilisé: {chosen.nom}")
         if not room.objets:
             self.pickup_menu_active = False
-        print(f"vous avez ajouté la pièce {chosen.name} en ({nx}, {ny})")
 
     def check_end_conditions(self):
         # 1) Lose: plus de pas
@@ -287,6 +304,10 @@ class Game:
         # --- 7. Menu de choix de pièces ---
         if self.menu_active:
             self.draw_room_choice_menu(hud_rect)
+
+        # --- 8. Objets dans la pièce actuelle ---
+        if not self.menu_active:
+            self.draw_room_objects(hud_rect)
 
         pygame.display.flip()
 

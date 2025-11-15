@@ -370,7 +370,7 @@ class Manor:
             choices.extend(random.sample(remaining, num_to_draw))
 
         random.shuffle(choices)
-
+        
         print("Tirage de pièces compatibles :")
         for r in choices:
             print(f" - {r.name} | portes: {r.doors} | condition: {r.placement_condition}")
