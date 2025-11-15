@@ -314,8 +314,8 @@ class Game:
 
     def draw_messages(self, hud_rect):
         x = hud_rect.left + 40
-        y = hud_rect.top + 400   # irgendwo unter dem Inventar
-        title = self.font_text.render("Log:", True, self.COLOR_TEXT)
+        y = hud_rect.top + 600
+        title = self.font_text.render("Messages:", True, self.COLOR_TEXT)
         self.screen.blit(title, (x, y))
         y += 30
 

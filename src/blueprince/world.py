@@ -81,7 +81,7 @@ class Chapel(Room):
             image=pygame.image.load("assets/rooms/Chapel.png"),
             doors=["left", "right", "down"],
             gem_cost=1,
-            objets=[Gemmes()],
+            objets=[Gemmes(1)],
             rarity=2
         )
     def apply_effect_on_enter(self, player):
@@ -147,7 +147,7 @@ class Library(Room):
             name="Library",
             image=pygame.image.load("assets/rooms/Library.png"),
             doors=["left", "down"],
-            objets=[Gemmes()],
+            objets=[Gemmes(1)],
             rarity=1
         )
 
@@ -158,7 +158,7 @@ class Vault(Room):
             image=pygame.image.load("assets/rooms/Vault.png"),
             doors=["down"],  # cul-de-sac
             gem_cost=3,
-            objets=[Or()],
+            objets=[Or(1)],
             rarity=3,
             placement_condition="edge"
         )
@@ -182,7 +182,7 @@ class Greenhouse(Room):
             name="Greenhouse",
             image=pygame.image.load("assets/rooms/Greenhouse.png"),
             doors=["down"],
-            objets=[Gemmes()],
+            objets=[Gemmes(1)],
             rarity=1,
             placement_condition="edge"
         )
@@ -193,7 +193,7 @@ class SecretGarden(Room):
             name="SecretGarden",
             image=pygame.image.load("assets/rooms/Secret_Garden.png"),
             doors=["left", "right", "down"],
-            objets=[Gemmes()],
+            objets=[Gemmes(1)],
             rarity=2,
             placement_condition="edge"
         )
@@ -224,7 +224,7 @@ class LockerRoom(Room):
             name="Locker Room",
             image=pygame.image.load("assets/rooms/Locker_Room.png"),
             doors=["up", "down"],
-            objets=[Cles()],
+            objets=[Cles(1)],
             rarity=1,
             placement_condition="edge"
         )
