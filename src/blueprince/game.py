@@ -231,12 +231,10 @@ class Game:
         if self.player.des <= 0:
             self.add_message("Vous n'avez pas de dés pour relancer!")
             return
-        
-        # Würfel verbrauchen
+
         self.player.des -= 1
         self.add_message(f"Vous utilisez un dé pour relancer. Dés restants: {self.player.des}")
-        
-        # Neue 3 Räume ziehen
+
         self.menu_choices = self.manor.draw_three_rooms(
             self.player.position, 
             self.selected_door, 
@@ -247,20 +245,19 @@ class Game:
             self.add_message("Erreur: Aucune pièce compatible trouvée après relance!")
             self.menu_active = False
             return
-        
-        # Index zurücksetzen
+
         self.menu_index = 0
 
     def confirm_room_choice(self):
         """Valide le choix de la pièce et la place dans le manoir."""
         chosen = self.menu_choices[self.menu_index]
+        
         x, y = self.player.position
         dx, dy = self.manor.get_direction_offset(self.selected_door)
 
         nx, ny = x + dx, y + dy
 
         self.manor.place_room(nx, ny, chosen)
-        self.player.move(self.selected_door, self.manor)
         self.menu_active = False
         self.add_message(f"Pièce ajoutée: {chosen.name}")
 

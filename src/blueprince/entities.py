@@ -128,7 +128,7 @@ class Player:
 
         next_room = manor.get_room(nx, ny)
         if not next_room:
-            self.add_message("Il n’y a pas encore de pièce dans cette direction.")
+            self.add_message("Il n'y a pas encore de pièce dans cette direction.")
             return
 
         # 3- Vérifier la porte opposée dans la pièce d'arrivée
