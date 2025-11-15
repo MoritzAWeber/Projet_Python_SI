@@ -109,12 +109,6 @@ class Player:
         self.perdre_pas(1)  # Perdre un pas à chaque déplacement
         print(f"Vous êtes maintenant dans {next_room.name}. ({self.pas} pas restants)")
 
-
-
-    def pick_up(self, item):
-        """Add item to inventory."""
-        self.inventory.add_item(item)
-
     def use_item(self, item_name, player):
         for item in self.inventory.consumables:
             if item.nom.lower() == item_name.lower():
@@ -193,7 +187,7 @@ class Or(ObjetConsommable):
 class Gemmes(ObjetConsommable):
     """Gemmes pour tirer des pieces speciales"""
     def __init__(self, valeur):
-        super().__init__("Gemmes", "Permet de choisir certaines pieces", valeur)
+        super().__init__("Gemme", "Permet de choisir certaines pieces", valeur)
 
     def pick_up(self, player):
         player.gemmes += self.valeur
@@ -203,7 +197,7 @@ class Gemmes(ObjetConsommable):
 class Cles(ObjetConsommable):
     """Clés permettant d'ouvrir portes et coffres."""
     def __init__(self, valeur):
-        super().__init__("Cles", "Permet d'ouvrir des portes verrouillées", valeur)
+        super().__init__("Cle", "Permet d'ouvrir des portes verrouillées", valeur)
 
     def pick_up(self, player):
         player.cles += self.valeur

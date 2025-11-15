@@ -1,7 +1,7 @@
 import pygame
 import random
 from .world import Manor, Antechamber
-from .entities import Player
+from .entities import Player, ObjetConsommable
 
 
 class Game:
@@ -73,6 +73,11 @@ class Game:
         self.menu_choices = []
         self.menu_index = 0
 
+        # === Ramasser des objets ===
+        self.pickup_menu_active = False
+        self.pickup_index = 0
+        self.pickup_choices = []
+
     # ====================== BOUCLE PRINCIPALE ======================
     def run(self):
         while self.running:
@@ -93,7 +98,7 @@ class Game:
                     self.running = False
 
                 # ---- Navigation principale ----
-                if not self.menu_active:
+                if not self.menu_active and not self.pickup_menu_active:
                     if event.key in (pygame.K_z, pygame.K_w):
                         self.player.move("up", self.manor)
                     elif event.key == pygame.K_s:
@@ -112,15 +117,28 @@ class Game:
                         self.selected_door = "right"
                     elif event.key == pygame.K_SPACE:
                         self.open_door_menu()
+                    elif event.key == pygame.K_e:
+                        self.open_object_pickup_menu()
 
                 # ---- Menu actif ----
-                else:
+                elif self.menu_active:
                     if event.key == pygame.K_LEFT:
                         self.menu_index = (self.menu_index - 1) % len(self.menu_choices)
                     elif event.key == pygame.K_RIGHT:
                         self.menu_index = (self.menu_index + 1) % len(self.menu_choices)
                     elif event.key == pygame.K_SPACE:
                         self.confirm_room_choice()
+
+                # ---- Ramasser des objets ----
+                elif self.pickup_menu_active:
+                    if event.key == pygame.K_UP:
+                        self.pickup_index = (self.pickup_index - 1) % len(self.pickup_choices)
+                    elif event.key == pygame.K_DOWN:
+                        self.pickup_index = (self.pickup_index + 1) % len(self.pickup_choices)
+                    elif event.key == pygame.K_SPACE:
+                        self.confirm_pickup_choice()
+                    elif event.key == pygame.K_e:
+                        self.pickup_menu_active = False
 
     # ====================== LOGIQUE DU JEU ======================
     def open_door_menu(self):
@@ -151,9 +169,32 @@ class Game:
         nx, ny = x + dx, y + dy
 
         self.manor.place_room(nx, ny, chosen)
-        self.player.move(self.selected_door, self.manor)
         self.menu_active = False
         print(f"Vous avez ajouté la pièce {chosen.name} en ({nx}, {ny})")
+
+    def open_object_pickup_menu(self):
+        x, y = self.player.position
+        room = self.manor.get_room(x, y)
+        if not room or not room.objets:
+            self.add_message("Il n'y a pas d'objets à ramasser ici.")
+            return
+
+        self.pickup_choices = room.objets
+        self.pickup_index = 0
+        self.pickup_menu_active = True
+
+    def confirm_pickup_choice(self):
+        """Valide le choix de l'objet à ramasser."""
+        chosen = self.pickup_choices[self.pickup_index]
+        x, y = self.player.position
+        room = self.manor.get_room(x, y)
+        if not room:
+            return
+        chosen.pick_up(self.player)
+        room.objets.remove(chosen)
+        self.add_message(f"Vous avez ramassé : {chosen.nom}")
+        if not room.objets:
+            self.pickup_menu_active = False
 
     def check_end_conditions(self):
         # 1) Lose: plus de pas
@@ -208,6 +249,10 @@ class Game:
         # --- 7. Menu de choix de pièces ---
         if self.menu_active:
             self.draw_room_choice_menu(hud_rect)
+
+        # --- 8. Objets dans la pièce actuelle ---
+        if not self.menu_active:
+            self.draw_room_objects(hud_rect)
 
         pygame.display.flip()
 
@@ -323,6 +368,57 @@ class Game:
             surf = self.font_small.render(msg, True, self.COLOR_TEXT)
             self.screen.blit(surf, (x, y))
             y += 22
+
+    def draw_room_objects(self, hud_rect):
+        """Shows the objects in the current Room"""
+        x = hud_rect.left + 200
+        y = hud_rect.top + 40
+
+        px, py = self.player.position
+        room = self.manor.get_room(px, py)
+        if not room:
+            return
+
+        title = self.font_text.render("Objets dans la pièce:", True, self.COLOR_TEXT)
+        self.screen.blit(title, (x, y))
+        y += 30
+
+        if not room.objets:
+            return
+
+        if not self.pickup_menu_active:
+            for i, obj in enumerate(room.objets, start=1):
+                if isinstance(obj, ObjetConsommable):
+                    line = self.font_small.render(f"{i}. Pick up {obj.nom} x {obj.valeur}", True, self.COLOR_TEXT)
+                    self.screen.blit(line, (x, y))
+                    y += 22
+                else:
+                    line = self.font_small.render(f"{i}. Pick up {obj.nom}", True, self.COLOR_TEXT)
+                    self.screen.blit(line, (x, y))
+                    y += 22
+            hint = self.font_small.render("E: ouvrir le menu", True, self.COLOR_TEXT)
+            self.screen.blit(hint, (x, y + 5))
+
+        else:
+
+            for i, obj in enumerate(room.objets, start=1):
+                text_color = (255, 215, 0) if i - 1 == self.pickup_index else self.COLOR_TEXT
+                if isinstance(obj, ObjetConsommable):
+                    line = self.font_small.render(f"{i}. Pick up {obj.nom} x {obj.valeur}", True, text_color)
+                    self.screen.blit(line, (x, y))
+                    y += 22
+                else:
+                    line = self.font_small.render(f"{i}. Pick up {obj.nom}", True, text_color)
+                    self.screen.blit(line, (x, y))
+                    y += 22
+            y += 5
+            hint = self.font_small.render("E: fermer le menu", True, self.COLOR_TEXT)
+            self.screen.blit(hint, (x, y))
+            hint2 = self.font_small.render("UP/DOWN + SPACE: ramasser", True, self.COLOR_TEXT)
+            y += 22
+            self.screen.blit(hint2, (x, y))
+
+
 
 
 # ====================== MAIN ======================
