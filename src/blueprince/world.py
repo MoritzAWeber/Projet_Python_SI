@@ -60,7 +60,7 @@ class Room(ABC):
     def apply_effect_on_choose(self, player):
         pass
 
-    def apply_effect_on_enter(self, player):
+    def apply_effect_on_enter(self, player, manor=None):
         pass
 
 
@@ -119,7 +119,7 @@ class Chapel(Room):
             objets=[Gemmes(1)],
             rarity=2
         )
-    def apply_effect_on_enter(self, player):
+    def apply_effect_on_enter(self, player, manor=None):
         player.gagner_pas(10)
 
 class Kitchen(Room):
@@ -206,8 +206,8 @@ class Furnace(Room):
             rarity=2,
             placement_condition="center"
         )
-    def apply_effect_on_enter(self, player):
-        player.perdre_pas(5)
+    def apply_effect_on_enter(self, player, manor=None):
+        player.perdre_pas(5, manor)
 
 class Greenhouse(Room):
     def __init__(self):
@@ -389,6 +389,18 @@ class Manor:
                     if cond == "top" and ny != 0:
                         continue
                     if cond == "bottom" and ny != self.HEIGHT - 1:
+                        continue
+                    
+                    # Check that no doors point outside the manor bounds
+                    valid_doors = True
+                    for door in rotated_room.doors:
+                        door_dx, door_dy = self.get_direction_offset(door)
+                        check_x, check_y = nx + door_dx, ny + door_dy
+                        if not self.in_bounds(check_x, check_y):
+                            valid_doors = False
+                            break
+                    
+                    if not valid_doors:
                         continue
                     
                     possible_rooms.append(rotated_room)

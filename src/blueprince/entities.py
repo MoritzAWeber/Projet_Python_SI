@@ -38,13 +38,35 @@ class Player:
         """Vérifie s'il reste des pas."""
         return self.pas > 0
 
-    def perdre_pas(self, quantite=1):
+    def perdre_pas(self, quantite=1, manor=None):
         """Appelée quand le joueur bouge."""
         self.pas -= quantite
         if not self.a_des_pas():
             self.pas = 0
-            self.is_alive = False # Le joueur perd s'il n'a plus de pas !
-            self.add_message("Vous n'avez plus de pas! Game Over.")
+            
+            # Check if there are step-giving items in current room
+            if manor and self.has_step_items_in_room(manor):
+                self.add_message("Attention! Plus de pas, mais des objets peuvent vous aider!")
+            else:
+                self.is_alive = False  # Le joueur perd s'il n'a plus de pas !
+                self.add_message("Vous n'avez plus de pas! Game Over.")
+    
+    def has_step_items_in_room(self, manor):
+        """Vérifie s'il y a des objets qui donnent des pas dans la pièce actuelle."""
+        x, y = self.position
+        room = manor.get_room(x, y)
+        
+        if not room or not room.objets:
+            return False
+        
+        # Check for food items (Pomme, Banane, Gateau, Sandwich, Repas) or Pas objects
+        step_giving_items = ["Pomme", "Banane", "Gâteau", "Sandwich", "Repas", "Pas"]
+        
+        for obj in room.objets:
+            if obj.nom in step_giving_items:
+                return True
+        
+        return False
 
     def gagner_pas(self, quantite):
         """Appelée quand le joueur mange une pomme, par exemple."""
@@ -117,8 +139,11 @@ class Player:
 
         # 4️-  Déplacement autorisé
         self.position = [nx, ny]
-        self.perdre_pas(1)  # Perdre un pas à chaque déplacement
+        self.perdre_pas(1, manor)  # Perdre un pas à chaque déplacement
         self.add_message(f"Vous êtes maintenant dans {next_room.name}. ({self.pas} pas restants)")
+        
+        # Appliquer l'effet du nouveau salon
+        next_room.apply_effect_on_enter(self, manor)
 
     def use_item(self, item_name, player):
         for item in self.inventory.consumables:
