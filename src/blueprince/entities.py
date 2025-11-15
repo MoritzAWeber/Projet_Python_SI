@@ -375,28 +375,26 @@ class Coffre(AutreObjet):
     def pick_up(self, player):
         """Open chest if player has Marteau"""
         if player.inventory.has_permanent("Marteau"):
-            # Random reward
-            rewards = [
-                Or(random.randint(3, 8)),
-                Gemmes(random.randint(1, 3)),
-                Cles(1),
-                Des(random.randint(1, 2))
-            ]
-            reward = random.choice(rewards)
-            reward.pick_up(player)
+            self.open_chest(player)
+            player.add_message("Vous utilisez le marteau pour ouvrir le coffre.")
         elif player.cles > 0:
-            # Random reward
-            rewards = [
-                Or(random.randint(3, 8)),
-                Gemmes(random.randint(1, 3)),
-                Cles(1),
-                Des(random.randint(1, 2))
-            ]
-            reward = random.choice(rewards)
-            reward.pick_up(player)
+            player.add_message("Vous utilisez une clé pour ouvrir le coffre.")
+            self.open_chest(player)
             player.cles -= 1
         else:
             player.add_message("Vous avez besoin d'un marteau ou un clé pour ouvrir ce coffre.")
+    
+    def open_chest(self, player):
+        self.already_opened = True
+        # Random reward
+        rewards = [
+            Or(random.randint(3, 8)),
+            Gemmes(random.randint(1, 3)),
+            Cles(1),
+            Des(random.randint(1, 2))
+        ]
+        reward = random.choice(rewards)
+        reward.pick_up(player)
 
 
     def should_consume_on_pickup(self):
@@ -470,8 +468,12 @@ class Casier(AutreObjet):
             if player.inventory.has_permanent("Kit de crochetage"):
                 player.add_message("Vous crochetez le casier avec le kit!")
                 self.open_locker(player)
+            elif player.cles > 0:
+                player.cles -= 1
+                player.add_message(f"Vous utilisez une clé! (Reste: {player.cles})")
+                self.open_locker(player)
             else:
-                player.add_message("Ce casier nécessite un kit de crochetage.")
+                player.add_message("Ce casier nécessite une clé ou un kit de crochetage.")
         
         # Level 2 lock: needs Key
         elif self.lock_level == 2:
@@ -490,9 +492,10 @@ class Casier(AutreObjet):
             Gemmes(random.randint(1, 2)),
             Pas(random.randint(5, 15))
         ]
-        reward = random.choice(rewards)
-        reward.pick_up(player)
-        player.add_message(f"Vous avez trouvé: {reward.nom} dans le casier!")
+        reward = random.sample(rewards, random.randint(1, 3))
+        for item in reward:
+            item.pick_up(player)
+            player.add_message(f"Vous avez trouvé: {item.nom} dans le casier!")
 
     def should_consume_on_pickup(self):
         """Détermine si l'objet doit être consommé immédiatement après la collecte."""

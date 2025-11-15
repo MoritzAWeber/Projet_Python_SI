@@ -178,24 +178,24 @@ class Game:
 
         # 4. Déterminer les clés requises et vérifier le paiement ---
         required_keys = lock_level
-        msg = ""
+        msg = None
 
         if lock_level == 1 and has_lockpick:
             required_keys = 0  # Le kit ouvre le Niv 1 gratuitement
             msg = "Vous crochetez la serrure (Niv 1)."
-        elif lock_level == 2:
-            required_keys = 2  # Le kit n'ouvre pas le Niv 2
+        elif (lock_level == 1 and not has_lockpick) or lock_level == 2:
+            required_keys = 1  # Le kit n'ouvre pas le Niv 2
         
         if self.player.cles < required_keys:
-            self.add_message(f"Porte verrouillée ! (Niv {lock_level})")
+            msg = f"Porte verrouillée ! (Niv {lock_level})"
             if required_keys > 0:
-                self.add_message(f"Il vous faut {required_keys} clé.")
+                msg = f"Il vous faut {required_keys} clé."
             return # Le joueur ne peut pas ouvrir
         
         # 5. Payer le coût en clés ---
         if required_keys > 0:
             self.player.cles -= required_keys
-            self.add_message(f"Vous utilisez {required_keys} clé.")
+            msg = f"Vous utilisez {required_keys} clé."
         
         if msg: # Affiche le message de crochetage
             self.add_message(msg)
@@ -247,7 +247,6 @@ class Game:
 
         if chosen.should_consume_on_pickup():
             room.objets.remove(chosen)
-            self.add_message(f"Vous avez ramassé et utilisé: {chosen.nom}")
         if not room.objets:
             self.pickup_menu_active = False
 
@@ -358,7 +357,7 @@ class Game:
         y = hud_rect.top + 40
         color = self.COLOR_TEXT
 
-        title = self.font_title.render("Inventory:", True, color)
+        title = self.font_title.render("Consumables:", True, color)
         self.screen.blit(title, (margin_x, y))
         y += 50
 
@@ -380,6 +379,20 @@ class Game:
         pygame.draw.line(self.screen, (180, 180, 180),
                          (margin_x, y + 10),
                          (margin_x + 200, y + 10), 1)
+        y += 30
+        # Permanent objects section
+        perm_title = self.font_small.render("Objets permanents:", True, color)
+        self.screen.blit(perm_title, (margin_x, y))
+        y += 26
+        if self.player.inventory.permanents:
+            for obj in self.player.inventory.permanents:
+                line = self.font_small.render(f"- {obj.nom}", True, color)
+                self.screen.blit(line, (margin_x + 8, y))
+                y += 22
+        else:
+            none_line = self.font_small.render("(aucun)", True, color)
+            self.screen.blit(none_line, (margin_x + 8, y))
+            y += 22
 
     def draw_room_choice_menu(self, hud_rect):
         """Dessine le menu des 3 pièces tirées."""

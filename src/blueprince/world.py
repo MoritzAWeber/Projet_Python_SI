@@ -41,7 +41,8 @@ class EntranceHall(Room):
             image=pygame.image.load("assets/rooms/Entrance_Hall.png"),
             doors=["up", "left", "right"],
             placement_condition="bottom",
-            objets=[EndroitCreuser()]
+            # Start room now provides a shovel so the player can dig here immediately
+            objets=[Pelle(), EndroitCreuser()]
         )
 
 class Antechamber(Room):
