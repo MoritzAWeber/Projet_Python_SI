@@ -276,6 +276,10 @@ class ObjetPermanent(Objet):
         """Ne jamais consommer un permanent : il reste en inventaire."""
         return False
 
+    def appliquer_effet(self, player):
+        """Chaque sous-classe définit son propre effet."""
+        pass
+
 
 
 class Pelle(ObjetPermanent):
