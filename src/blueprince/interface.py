@@ -204,7 +204,7 @@ class Game:
             self.screen.blit(line, (x, y))
             y += 30
 
-        hint = self.font_small.render("↑↓ choisir  |  SPACE acheter  |  E fermer", True, self.COLOR_TEXT)
+        hint = self.font_small.render("UP/DOWN choisir  |  SPACE acheter  |  E fermer", True, self.COLOR_TEXT)
         self.screen.blit(hint, (x, y + 20))
 
     # ====================== INVENTAIRE ======================

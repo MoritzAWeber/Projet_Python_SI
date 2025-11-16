@@ -41,6 +41,7 @@ class Player:
         self.is_alive = True    # Utile pour la boucle de jeu principale
         
         self.message_callback = None  # Callback function for messages
+        self.game = None  # Assigned by Game after creation; allows safe attribute access
 
     def set_message_callback(self, callback):
         """Set callback function for displaying messages to player.
@@ -75,13 +76,13 @@ class Player:
         - Sets is_alive to False if steps reach 0 and no step items available
         - Shows game over message or warning about available items
         """
-        self.pas -= quantite
+        self.pas -= quantite  # Core movement cost
         if not self.a_des_pas():
             self.pas = 0
             
             # Check if there are step-giving items in current room
             if manor and self.has_step_items_in_room(manor):
-                self.add_message("Attention! Plus de pas, mais des objets peuvent vous aider!")
+                self.add_message("Attention! Plus de pas, mais des objets peuvent vous aider!")  # Warn player they can still recover
             else:
                 self.is_alive = False  # Le joueur perd s'il n'a plus de pas !
                 self.add_message("Vous n'avez plus de pas! Game Over.")
@@ -102,7 +103,7 @@ class Player:
             return False
         
         # Check for food items (Pomme, Banane, Gateau, Sandwich, Repas) or Pas objects
-        step_giving_items = ["Pomme", "Banane", "Gâteau", "Sandwich", "Repas", "Pas"]
+        step_giving_items = ["Pomme", "Banane", "Gâteau", "Sandwich", "Repas", "Pas"]  # 'Pas' kept for legacy compatibility
         
         for obj in room.objets:
             if obj.nom in step_giving_items:
@@ -147,7 +148,7 @@ class Player:
             return False
             
         next_room = manor.get_room(nx, ny)
-        if next_room and self.opposite_direction[direction] not in next_room.doors:
+        if next_room and self.opposite_direction[direction] not in next_room.doors:  # Require reciprocal door for valid corridor
             return False
         return True   
     
@@ -178,12 +179,10 @@ class Player:
             self.add_message("Vous n’êtes dans aucune pièce.")
             return
 
-        # 1️⃣ Vérifier qu'il y a une porte dans cette direction depuis la pièce actuelle
-        if direction not in current_room.doors:
+        if direction not in current_room.doors:  # No exit in chosen direction
             self.add_message(f"Pas de porte vers {direction} dans {current_room.name}.")
             return
 
-        # 2️⃣ Calculer la position de la pièce voisine
         dx, dy = 0, 0
         if direction == "up":
             dy = -1
@@ -197,23 +196,20 @@ class Player:
         nx, ny = x + dx, y + dy
 
         next_room = manor.get_room(nx, ny)
-        if not next_room:
+        if not next_room:  # Room not yet placed
             self.add_message("Il n'y a pas encore de pièce dans cette direction.")
             return
 
-        # 3- Vérifier la porte opposée dans la pièce d'arrivée
         opposite = {"up": "down", "down": "up", "left": "right", "right": "left"}
-        if opposite[direction] not in next_room.doors:
+        if opposite[direction] not in next_room.doors:  # Prevent one-way traversal into a sealed side
             self.add_message(f"{next_room.name} n’a pas de porte vers {opposite[direction]}.")
             return
 
-        # 4️-  Déplacement autorisé
-        self.position = [nx, ny]
-        self.perdre_pas(1, manor)  # Perdre un pas à chaque déplacement
+        self.position = [nx, ny]  # Commit movement
+        self.perdre_pas(1, manor)  # Deduct step after successful move
         self.add_message(f"Vous êtes maintenant dans {next_room.name}. ({self.pas} pas restants)")
         
-        # === FIX SHOP : fermer le shop si on quitte une pièce jaune ===
-        if hasattr(self, "game") and self.game.shop_menu_active:
+        if self.game and getattr(self.game, "shop_menu_active", False):  # Auto-close shop when leaving yellow room
             old_color = getattr(current_room, "color", None)
             new_color = getattr(next_room, "color", None)
             if old_color == "yellow" and new_color != "yellow":
@@ -272,9 +268,9 @@ class Objet(ABC):
         # Métadonnées par défaut pour la génération de butin
         # Les sous-classes peuvent les surcharger en tant qu'attributs de classe
         if not hasattr(self, "is_metallic"):
-            self.is_metallic = False
+            self.is_metallic = False  # Defaults non-metallic unless subclass overrides
         if not hasattr(self, "base_find_chance"):
-            self.base_find_chance = 0.5
+            self.base_find_chance = 0.5  # Default baseline probability for loot generation
         super().__init__()
 
     @abstractmethod
@@ -361,7 +357,7 @@ class Cles(ObjetConsommable):
     def __init__(self, valeur):
         super().__init__("Cle", "Permet d'ouvrir des portes verrouillées", valeur)
         # Augmenter la chance de base pour apparaître
-        self.base_find_chance = 0.75
+        self.base_find_chance = 0.75  # Boosted availability due to doorway progression reliance
 
     def pick_up(self, player):
         """Add keys to player inventory.
@@ -473,7 +469,7 @@ class DetecteurMetaux(ObjetPermanent):
         super().__init__("Détecteur de métaux", "Augmente les chances de trouver des clés et de l'or")
         self.is_metallic = True
         # Réduction de la probabilité de base pour équilibrer plus large distribution
-        self.base_find_chance = 0.35
+        self.base_find_chance = 0.35  # Lower base to keep detector relatively rare
 
     def appliquer_effet(self, player):
         """Notify player of enhanced item discovery.
@@ -493,7 +489,7 @@ class PatteLapin(ObjetPermanent):
     def __init__(self):
         super().__init__("Patte de lapin", "Augmente la chance de trouver des objets rares")
         # Ajout d'une probabilité explicite plus faible (par défaut c'était ~0.5 implicite)
-        self.base_find_chance = 0.25
+        self.base_find_chance = 0.25  # Intentional low base to balance global luck bonus
 
     def appliquer_effet(self, player):
         """Notify player of increased luck.
@@ -535,7 +531,6 @@ class Pomme(AutreObjet):
         Parameters:
         - player: Player instance
         """
-        #player.add_message("Le joueur regagne 2 pas")
         player.gagner_pas(2) # Appelle la méthode du joueur
 
 
@@ -550,7 +545,6 @@ class Banane(AutreObjet):
         Parameters:
         - player: Player instance
         """
-        #player.add_message("Le joueur regagne 3 pas")
         player.gagner_pas(3) #
 
 
@@ -565,7 +559,6 @@ class Gateau(AutreObjet):
         Parameters:
         - player: Player instance
         """
-        #player.add_message("Le joueur regagne 10 pas")
         player.gagner_pas(10)
 
 
@@ -580,7 +573,6 @@ class Sandwich(AutreObjet):
         Parameters:
         - player: Player instance
         """
-        #player.add_message("Le joueur regagne 15 pas")
         player.gagner_pas(15)
 
 
@@ -595,7 +587,6 @@ class Repas(AutreObjet):
         Parameters:
         - player: Player instance
         """
-        #player.add_message("Le joueur regagne 25 pas")
         player.gagner_pas(25)
 
 

@@ -81,9 +81,7 @@ class Game:
         # HUD layout helper: records the Y after inventory/permanents
         self.hud_y_after_inventory = 0
         
-        # === Tracking für gefundene Permanents (verhindert Respawn) ===
         self.found_permanents = set()
-        # Referenz für Manor, damit Rooms darauf zugreifen können
         self.manor.found_permanents = self.found_permanents
 
         # === Sélecteur de porte + menu ===
@@ -103,7 +101,6 @@ class Game:
         self.victory = False
         self.victory_message = ""
         
-        #demenade d'ouvrir la porte 
         self.confirm_door_active = False  # Nouvel état pour la confirmation
         self.confirm_door_details = {}    # Pour mémoriser quelle porte on ouvre
     
@@ -162,7 +159,7 @@ class Game:
                     continue
 
                 # --- Confirmation ouverture de porte ---
-                if self.confirm_door_active:
+                if self.confirm_door_active:  # Confirmation modal overrides all other inputs
                     if event.key == pygame.K_o:   # OUI
                         self._execute_door_opening()
                     elif event.key == pygame.K_a: # NON
@@ -173,7 +170,7 @@ class Game:
                 # ============================================================
                 # MODE SHOP (menu actif)
                 # ============================================================
-                if self.shop_menu_active:
+                if self.shop_menu_active:  # Shop navigation state
                     if event.key == pygame.K_UP:
                         self.shop_index = (self.shop_index - 1) % len(self.shop_items)
                     elif event.key == pygame.K_DOWN:
@@ -187,7 +184,7 @@ class Game:
                 # ============================================================
                 # MODE PICKUP (ramasser objets)
                 # ============================================================
-                if self.pickup_menu_active:
+                if self.pickup_menu_active:  # Pickup list navigation state
                     if event.key == pygame.K_UP:
                         self.pickup_index = (self.pickup_index - 1) % len(self.pickup_choices)
                     elif event.key == pygame.K_DOWN:
@@ -201,7 +198,7 @@ class Game:
                 # ============================================================
                 # MENU DE TIRAGE (3 pièces)
                 # ============================================================
-                if self.menu_active:
+                if self.menu_active:  # Draft menu navigation state
                     if event.key == pygame.K_LEFT:
                         self.menu_index = (self.menu_index - 1) % len(self.menu_choices)
                     elif event.key == pygame.K_RIGHT:
@@ -218,7 +215,7 @@ class Game:
                 # ============================================================
                 # NAVIGATION / SELECTION & MENUS (PAS DE MOUVEMENT DIRECT)
                 # ============================================================
-                if not self.menu_active and not self.pickup_menu_active and not self.confirm_door_active:
+                if not self.menu_active and not self.pickup_menu_active and not self.confirm_door_active:  # Free navigation / selection state
                     if event.key == pygame.K_z or event.key == pygame.K_UP:
                         self.selected_door = "up"
                     elif event.key == pygame.K_s or event.key == pygame.K_DOWN:
@@ -245,7 +242,6 @@ class Game:
 
 
 
-    # la gestion des niveau des portes + gestion de la demande des cles
     def open_door_menu(self):
         """Handle door opening logic with lock levels and key requirements.
 
@@ -268,12 +264,12 @@ class Game:
         nx, ny = x + dx, y + dy
 
         # 1. Si la pièce existe déjà, on bouge
-        if self.manor.get_room(nx, ny):
+        if self.manor.get_room(nx, ny):  # Already placed -> attempt movement instead of drafting
             self.player.move(self.selected_door, self.manor)
             return
         
         # 2. Calculer le coût de la porte
-        lock_level = 0
+        lock_level = 0  # Difficulty escalates as player moves upward (towards y=0)
         if ny in [8, 7, 6]:
             lock_level = 0
         elif ny in [5, 4]:
@@ -284,12 +280,12 @@ class Game:
             lock_level = 2
 
         # 3. Vérifier les outils (Kit de crochetage)
-        has_lockpick = any(isinstance(obj, KitCrochetage) for obj in self.player.inventory.permanents)
+        has_lockpick = any(isinstance(obj, KitCrochetage) for obj in self.player.inventory.permanents)  # Enables bypass of level 1 cost
 
         required_keys = 0 if lock_level == 0 else 1
         pickaxe_msg = None
 
-        if lock_level == 1 and has_lockpick:
+        if lock_level == 1 and has_lockpick:  # Lockpick only waives level 1, not level 2
             required_keys = 0
             pickaxe_msg = "Vous crochetez la serrure (Niv 1)."
         
@@ -309,7 +305,7 @@ class Game:
         }
 
         # 6. Demander confirmation OU ouvrir directement si gratuit
-        if required_keys > 0:
+        if required_keys > 0:  # Non-free door requires explicit confirmation
             # Demander confirmation
             self.confirm_door_active = True
             self.add_message(f"Porte Niv {lock_level} ({required_keys} clé). [O]=Ouvrir / [A]=Annuler")
@@ -335,7 +331,7 @@ class Game:
         pickaxe_msg = details['pickaxe_msg']
 
         # 2. Payer le coût et afficher le message
-        if required_keys > 0:
+        if required_keys > 0:  # Deduct committed cost
             self.player.cles -= required_keys
             self.add_message(f"Vous utilisez {required_keys} clé(s).")
         elif pickaxe_msg:
@@ -349,11 +345,11 @@ class Game:
             self.manor.pioche
         )
         
-        if not self.menu_choices:
+        if not self.menu_choices:  # Draft failed (no compatible rooms) -> rollback cost and abort
              self.add_message("Erreur : Aucune pièce compatible trouvée !")
              # (On redonne les clés si elles ont été dépensées pour rien)
              if required_keys > 0:
-                 self.player.cles += required_keys
+                 self.player.cles += required_keys  # Refund since no draft options
              self.confirm_door_active = False
              self.confirm_door_details = {}
              return
@@ -385,6 +381,7 @@ class Game:
             self.selected_door, 
             self.manor.pioche
         )
+        # Reroll keeps door direction & deck; only the room selection changes
         
         if not self.menu_choices:
             self.add_message("Erreur: Aucune pièce compatible trouvée après relance!")
@@ -402,7 +399,7 @@ class Game:
         - Applies Nursery bonus if active and room is a bedroom type
         - Closes room draft menu
         """
-        chosen = self.menu_choices[self.menu_index]
+        chosen = self.menu_choices[self.menu_index]  # Selected room object (may have gem cost)
         cost = getattr(chosen, 'gem_cost', 0)
         if cost > 0:
             if self.player.gemmes < cost:
@@ -416,13 +413,13 @@ class Game:
 
         nx, ny = x + dx, y + dy
 
-        self.manor.place_room(nx, ny, chosen)
+        self.manor.place_room(nx, ny, chosen)  # Commit placement & remove from catalog
         self.menu_active = False
         self.add_message(f"Pièce ajoutée: {chosen.name}")
 
 
         # LE BONUS de la piece NURSERY
-        if getattr(self.manor, "bonus_on_draft_bedroom", False):
+        if getattr(self.manor, "bonus_on_draft_bedroom", False):  # Nursery flag: extra steps on drafting bedroom types
             if chosen.name in ("Bedroom", "BunkRoom", "GuestBedroom"):
                 self.player.gagner_pas(5)
 
@@ -510,13 +507,12 @@ class Game:
         if not room:
             return
         
-        # Track permanents global, um Respawn zu verhindern
         if chosen.type == "permanent":
             self.found_permanents.add(chosen.__class__.__name__)
         
         chosen.pick_up(self.player)
         # Ne retirer l'objet que s'il doit réellement être consommé.
-        remove_after = True
+        remove_after = True  # Decide if object should be consumed/removed after pickup
         if hasattr(chosen, 'should_consume_on_pickup'):
             try:
                 remove_after = chosen.should_consume_on_pickup()
@@ -601,7 +597,6 @@ class Game:
         self.manor = Manor()
         self.player = Player("Player", self.manor)
         self.player.set_message_callback(self.add_message)
-        # Reset tracking für permanente Objekte
         self.found_permanents = set()
         self.manor.found_permanents = self.found_permanents
         self.selected_door = "up"
@@ -637,7 +632,7 @@ class Game:
         Updates display with pygame.display.flip().
         """
         self.screen.fill(self.COLOR_BG, (0, 0, self.game_width, self.window_height))
-        # reset dynamic layout markers each frame
+        # Reset dynamic HUD vertical markers each frame (used by subsequent panels)
         self.hud_y_after_room_menu = 0
 
         # --- 1. Dessiner le manoir ---
@@ -852,8 +847,7 @@ class Game:
             cost_color = (120, 180, 120) if cost == 0 else ((180, 60, 60) if not affordable else color)
             cost_surf = self.font_small.render(cost_text, True, cost_color)
             self.screen.blit(cost_surf, (x + 10, y_img + card_size + 28))
-        
-        # Reroll-Anzeige
+
         reroll_y = y_img + card_size + 50
         if self.player.des > 0:
             reroll_text = f"[R] Relancer ({self.player.des} dés disponibles)"

@@ -40,15 +40,16 @@ def generate_random_loot(player, item_pool, found_permanents=None):
     luck_multiplier = 1.15 if has_rabbits_foot else 1.0
 
     for item in item_pool:
-        # Skip permanents bereits gefunden
+        # Each item instance = one independent roll; duplicates model higher availability.
+        # Skip permanents already found globally so they never respawn.
         if getattr(item, 'type', None) == 'permanent' and item.__class__.__name__ in found_permanents:
             continue
         
         base_chance = getattr(item, 'base_find_chance', 0.5)
         is_metallic = getattr(item, 'is_metallic', False)
-        chance = base_chance * luck_multiplier
+        chance = base_chance * luck_multiplier  # Rabbit's foot boosts all base chances uniformly
         if is_metallic and has_metal_detector:
-            chance *= 1.25
+            chance *= 1.25  # Metal detector only amplifies metallic items
         if random.random() < chance:
             result.append(item)
 
@@ -185,19 +186,19 @@ class Room(ABC):
         - up → right → down → left → up
         """
         if num_rotations == 0:
-            return self  # No rotation needed, return self
+            return self  # No rotation needed, return original instance
         
         # Manually create a new room instance with rotated attributes
         rotated_doors = self.original_doors.copy()
         
-        # Apply rotation num_rotations times
+        # Apply rotation num_rotations times (clockwise); keep only first valid orientation per source room
         for _ in range(num_rotations):
             rotation_map = {"up": "right", "right": "down", "down": "left", "left": "up"}
             rotated_doors = [rotation_map[d] for d in rotated_doors]
 
         rotated_image = pygame.transform.rotate(self.image, -90 * num_rotations) if self.image else None
 
-        # Instantiate without calling subclass __init__ to be able to set fields manually
+        # Instantiate WITHOUT calling subclass __init__ (manual clone) to preserve existing state while only changing rotation & doors
         rotated = self.__class__.__new__(self.__class__)
         # Copy scalar & mutable attributes
         rotated.name = self.name
@@ -316,7 +317,7 @@ class Greenhouse(Room):
             return
         if not hasattr(manor, "green_draw_bonus"):
             manor.green_draw_bonus = 0
-        manor.green_draw_bonus += 1
+        manor.green_draw_bonus += 1  # Increment cumulative weight bonus for future green room drafts
         player.add_message("Greenhouse: bonus de tirage vert +1")
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
@@ -345,7 +346,7 @@ class MorningRoom(Room):
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
         
-        player.gemmes += 2
+        player.gemmes += 2  # One-shot direct gem grant
         player.add_message("Morning Room: +2 gemmes")
         self.effect_triggered = True 
 
@@ -384,7 +385,7 @@ class SecretGarden(Room):
         fruits = [Pomme(), Banane()]
         target_conf = getattr(manor, "redirect_spread_to_conference", None)
 
-        if target_conf is not None:
+        if target_conf is not None:  # Redirect spread effect to a single conference room if active
             for _ in range(manor.WIDTH * manor.HEIGHT):
                 if random.random() < 0.20:
                     target_conf.objets.append(random.choice(fruits))
@@ -432,7 +433,7 @@ class Veranda(Room):
         manor = getattr(player, "manor", None)
         if manor is None:
             return
-        manor.green_item_bonus = True
+        manor.green_item_bonus = True  # Flag enabling extra item bonuses for future green rooms
         player.add_message("Veranda: bonus d'objets verts activé")
         self.effect_triggered = True 
 
@@ -503,14 +504,14 @@ class Patio(Room):
         if manor is None:
             return
 
-        for y in range(manor.HEIGHT):
+        for y in range(manor.HEIGHT):  # Iterate all rooms and append a gem to each green room's objet list
             for x in range(manor.WIDTH):
                 room = manor.get_room(x, y)
                 if room and getattr(room, "color", "") == "green":
                     room.objets.append(Gemmes(1))
         player.add_message("Patio: +1 gemme ajoutée à chaque pièce verte")
         
-        self.effect_triggered = True # <-- CORRECTION
+        self.effect_triggered = True
 
 
 class Terrace(Room):
@@ -542,7 +543,7 @@ class Terrace(Room):
         manor = getattr(player, "manor", None)
         if manor is None:
             return
-        manor.green_rooms_free = True
+        manor.green_rooms_free = True  # All green rooms now cost 0 gems in drafts
         player.add_message("Terrace: les pièces vertes deviennent gratuites")
         self.effect_triggered = True 
 
@@ -577,7 +578,7 @@ class HerLadyshipsChamber(Room):
         if self.effect_triggered: return 
         
         manor = player.manor
-        manor.bonus_next_boudoir_steps = 10
+        manor.bonus_next_boudoir_steps = 10  # Next Boudoir visit yields extra steps
         manor.bonus_next_walkin_gems = 3
         player.add_message("Her Ladyship’s Chamber: prochains bonus activés")
         self.effect_triggered = True 
@@ -609,7 +610,7 @@ class MasterBedroom(Room):
         self.generate_loot_on_enter(player)
         
         manor = player.manor
-        count = sum(1 for y in range(manor.HEIGHT) for x in range(manor.WIDTH) if manor.get_room(x, y))
+        count = sum(1 for y in range(manor.HEIGHT) for x in range(manor.WIDTH) if manor.get_room(x, y))  # Dynamic bonus scales with expansion
         player.gagner_pas(count)
         player.add_message(f"Master Bedroom: +{count} pas (pièces posées)")
 
@@ -641,7 +642,7 @@ class Nursery(Room):
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
         
-        player.manor.bonus_on_draft_bedroom = True
+        player.manor.bonus_on_draft_bedroom = True  # Future drafts of bedroom-type rooms grant extra steps
         player.add_message("Nursery: les prochains tirages de Bedroom donnent +5 pas")
         self.effect_triggered = True 
 
@@ -670,7 +671,7 @@ class ServantsQuarters(Room):
         self.generate_loot_on_enter(player)
         
         manor = player.manor
-        count = 0
+        count = 0  # Accumulate keys based on bedroom presence (BunkRoom counts double)
         for y in range(manor.HEIGHT):
             for x in range(manor.WIDTH):
                 room = manor.get_room(x, y)
@@ -705,8 +706,7 @@ class Bedroom(Room):
     def apply_effect_on_enter(self, player):
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
-        
-        player.gagner_pas(2)
+        player.gagner_pas(2)  # Small repeatable step bonus
         # gagner_pas affiche déjà un message
 
 
@@ -783,7 +783,7 @@ class GuestBedroom(Room):
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
         
-        player.gagner_pas(10)
+        player.gagner_pas(10)  # One-time large step bonus
         # gagner_pas affiche déjà un message
         self.effect_triggered = True 
 
@@ -887,7 +887,7 @@ class Foyer(Room):
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
         
-        player.manor.hallway_doors_unlocked = True
+        player.manor.hallway_doors_unlocked = True  # Future Hallway instances treat extra doors as unlocked
         player.add_message("Foyer: portes de Hallway déverrouillées")
         self.effect_triggered = True 
 
@@ -914,7 +914,7 @@ class SecretPassage(Room):
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
         
-        player.manor.next_room_color_choice = True
+        player.manor.next_room_color_choice = True  # Grants a color selection override on next draft
         player.add_message("Secret Passage: choix de la couleur au prochain tirage")
         self.effect_triggered = True 
 
@@ -951,7 +951,7 @@ class LockerRoom(Room):
 
         target_conf = getattr(manor, "redirect_spread_to_conference", None)
 
-        if target_conf is not None:
+        if target_conf is not None:  # Redirect key spread if ConferenceRoom magnet active
             for _ in range(manor.WIDTH * manor.HEIGHT):
                 if random.random() < 0.20:
                     target_conf.objets.append(Cles(1))
@@ -991,7 +991,7 @@ class Vault(Room):
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
         
-        player.or_ += 40
+        player.or_ += 40  # Large one-shot gold injection
         player.add_message("Vault: +40 or")
         self.effect_triggered = True 
 
@@ -1018,7 +1018,7 @@ class Workshop(Room):
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
         
-        permanents = [Pelle(), Marteau(), DetecteurMetaux(), PatteLapin()]
+        permanents = [Pelle(), Marteau(), DetecteurMetaux(), PatteLapin()]  # KitCrochetage excluded from random grant
         item = random.choice(permanents)
         player.inventory.add_item(item)
         player.add_message(f"Workshop: objet permanent obtenu ({item.nom})")
@@ -1044,7 +1044,7 @@ class BoilerRoom(Room):
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
         
-        player.gagner_pas(3)
+        player.gagner_pas(3)  # Repeatable small step bonus
         # gagner_pas affiche déjà un message
 
 
@@ -1071,7 +1071,7 @@ class ConferenceRoom(Room):
         self.generate_loot_on_enter(player)
         
         manor = player.manor
-        manor.redirect_spread_to_conference = self
+        manor.redirect_spread_to_conference = self  # Acts as a target for future spread effects (Garden, LockerRoom)
         player.add_message("Conference Room: les futurs effets de dispersion convergeront ici")
         self.effect_triggered = True 
 
@@ -1098,7 +1098,7 @@ class Gallery(Room):
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
         
-        player.gemmes += 1
+        player.gemmes += 1  # One-shot gem bonus
         player.add_message("Gallery: +1 gemme")
         self.effect_triggered = True 
 
@@ -1125,7 +1125,7 @@ class Garage(Room):
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
         
-        player.cles += 3
+        player.cles += 3  # One-shot key bundle
         player.add_message("Garage: +3 clés")
         self.effect_triggered = True 
 
@@ -1150,7 +1150,7 @@ class Library(Room):
         self.generate_loot_on_enter(player)
         
         manor = player.manor
-        manor.rarity_bias += 1
+        manor.rarity_bias += 1  # Increment rarity bias to weight future rare room draws
         player.add_message("Library: biais de rareté augmenté")
 
 
@@ -1176,7 +1176,7 @@ class RumpusRoom(Room):
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
         
-        player.or_ += 8
+        player.or_ += 8  # One-shot medium gold bonus
         player.add_message("Rumpus Room: +8 or")
         self.effect_triggered = True 
 
@@ -1203,7 +1203,7 @@ class Pantry(Room):
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
         
-        player.or_ += 4
+        player.or_ += 4  # One-shot small gold bonus
         player.add_message("Pantry: +4 or")
         self.effect_triggered = True 
 
@@ -1230,7 +1230,7 @@ class Room8(Room):
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
         
-        player.gemmes += 1
+        player.gemmes += 1  # One-shot gem bonus
         player.add_message("Room 8: +1 gemme")
         self.effect_triggered = True 
 
@@ -1259,7 +1259,7 @@ class Rotunda(Room):
         new_doors = []
         mapping = {"up": "right", "right": "down", "down": "left", "left": "up"}
         for d in self.doors:
-            new_doors.append(mapping.get(d, d))
+            new_doors.append(mapping.get(d, d))  # Rotate each existing door clockwise
         self.doors = new_doors
         player.add_message("Rotunda: les portes ont tourné")
         
@@ -1537,7 +1537,6 @@ class Manor:
         # Biais de rareté (Library)
         self.rarity_bias = 0
 
-        # Tracking für gefundene permanente Objekte (wird von Game gesetzt)
         self.found_permanents = set()
 
 
@@ -1597,7 +1596,7 @@ class Manor:
         # Find the original room by name in the catalog
         for catalog_room in self.room_catalog[:]:  # Use slice to iterate over copy
             if catalog_room.name == room.name:
-                self.room_catalog.remove(catalog_room)
+                self.room_catalog.remove(catalog_room)  # Remove single matching instance; other duplicates remain available
                 break
 
     def get_room_weight(self, room):
@@ -1617,11 +1616,11 @@ class Manor:
 
         # Bonus Greenhouse
         if getattr(self, "green_draw_bonus", 0) > 0 and room.color == "green":
-            w *= (1 + self.green_draw_bonus)
+            w *= (1 + self.green_draw_bonus)  # Linear scaling per Greenhouse visit
 
         # Bonus Library (pièces rarity >= 2)
         if getattr(self, "rarity_bias", 0) > 0 and room.rarity >= 2:
-            w *= (1 + self.rarity_bias)
+            w *= (1 + self.rarity_bias)  # Library bias makes rare rooms more likely cumulatively
 
         return w
 
@@ -1654,13 +1653,14 @@ class Manor:
         x, y = current_pos
         dx, dy = self.get_direction_offset(direction)
         nx, ny = x + dx, y + dy
+        # (nx, ny) is the target placement coordinate for the new room
         
         # Get all possible room rotations that match the required door
         required_door = self.opposite_direction[direction]
         possible_rooms = []
         
         for room in room_catalog:
-            # Try all rotations of each room
+            # Try all rotations; keep only the first rotation whose door layout matches to avoid duplicate same room names
             for rotated_room in room.get_all_rotations():
                 if required_door in rotated_room.doors:
                     # Check placement condition on TARGET position (nx, ny)
@@ -1675,7 +1675,7 @@ class Manor:
                     if cond == "bottom" and ny != self.HEIGHT - 1:
                         continue
                     
-                    # Check that no doors point outside the manor bounds
+                    # Check that no rotated door would point outside the manor bounds from target cell
                     valid_doors = True
                     for door in rotated_room.doors:
                         door_dx, door_dy = self.get_direction_offset(door)
@@ -1754,37 +1754,11 @@ class Manor:
             # Retirer du pool
             del pool[idx]
             del weights[idx]
-
-
-        # If no compatible rooms, return empty (should not happen normally)
+        # If no compatible rooms (original possible_rooms list empty), return empty set
         if not possible_rooms:
             return []
 
-        # Separate free and paid rooms
-        free_rooms = [r for r in possible_rooms if r.gem_cost == 0]
-        paid_rooms = [r for r in possible_rooms if r.gem_cost > 0]
-        
-        choices = []
-
-        # Forcer au moins une gratuite
-        if free_rooms:
-            choices.append(random.choice(free_rooms))
-        
-        # Add up to 2 more rooms (can be free or paid)
-        remaining = [r for r in possible_rooms if r not in choices]
-        num_to_draw = min(2, len(remaining))
-        if num_to_draw > 0:
-            choices.extend(random.sample(remaining, num_to_draw))
-        
-        # If we have less than 3 choices, fill with what we have
-        random.shuffle(choices)
-
-        # removed debug: listing compatible drawn rooms
-        for r in choices:
-            pass  # removed debug per-room listing
-
-        
-        return choices[:3]  # Return maximum 3 rooms
+        return choices[:3]  # Weighted selection result
     
     def get_direction_offset(self, direction):
         """Convert direction string to grid offset.
