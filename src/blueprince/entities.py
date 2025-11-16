@@ -143,7 +143,7 @@ class Player:
         self.add_message(f"Vous êtes maintenant dans {next_room.name}. ({self.pas} pas restants)")
         
         # Appliquer l'effet du nouveau salon
-        next_room.apply_effect_on_enter(self, manor)
+        next_room.apply_effect_on_enter(self)
 
     def use_item(self, item_name, player):
         for item in self.inventory.consumables:
@@ -263,18 +263,18 @@ class Des(ObjetConsommable):
 
 
 class ObjetPermanent(Objet):
-    """Classe mère pour les objets permanents"""
-
     def __init__(self, nom, description):
         super().__init__(nom, description, "permanent")
 
     def pick_up(self, player):
+        """Ajoute l’objet permanent à l’inventaire et applique son effet."""
         player.inventory.add_item(self)
-        player.add_message("Le joueur peut maintenant creuser des trous")
+        self.appliquer_effet(player)   # ← appelle l'effet spécifique
+        player.add_message(f"Objet permanent obtenu : {self.nom}")
 
     def should_consume_on_pickup(self):
-        """Détermine si l'objet doit être consommé immédiatement après la collecte."""
-        return True
+        """Ne jamais consommer un permanent : il reste en inventaire."""
+        return False
 
 
 

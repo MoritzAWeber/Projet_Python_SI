@@ -20,7 +20,7 @@ class Game:
         self.cell_size = 90
         self.margin = 5
         self.messages = []
-        self.max_messages = 1
+        self.max_messages = 3
 
         self.game_width = self.COLS * self.cell_size
         self.hud_width = int(self.cell_size * 6)
@@ -64,7 +64,8 @@ class Game:
         # === Monde et joueur ===
         self.clock = pygame.time.Clock()
         self.manor = Manor()
-        self.player = Player("Raouf")
+        self.player = Player("Player")
+        self.player.manor = self.manor
         self.player.set_message_callback(self.add_message)
         self.running = True
 
@@ -84,6 +85,10 @@ class Game:
         # === Victory state ===
         self.victory = False
         self.victory_message = ""
+        
+        #demenade d'ouvrir la porte 
+        self.confirm_door_active = False  # Nouvel état pour la confirmation
+        self.confirm_door_details = {}    # Pour mémoriser quelle porte on ouvre
 
     # ====================== BOUCLE PRINCIPALE ======================
     def run(self):
@@ -110,9 +115,19 @@ class Game:
                     if event.key == pygame.K_r:
                         self.restart_game()
                     continue
+                
+                elif self.confirm_door_active:
+                    if event.key == pygame.K_o:
+                        # OUI : Le joueur confirme
+                        self._execute_door_opening()
+                    elif event.key == pygame.K_a:
+                        # NON : Le joueur annule
+                        self.confirm_door_active = False
+                        self.confirm_door_details = {}
+                        self.add_message("Action annulée.")
 
                 # ---- Navigation principale ----
-                if not self.menu_active and not self.pickup_menu_active:
+                elif not self.menu_active and not self.pickup_menu_active and not self.confirm_door_active:
                     if event.key in (pygame.K_z, pygame.K_w):
                         self.player.move("up", self.manor)
                     elif event.key == pygame.K_s:
@@ -156,7 +171,7 @@ class Game:
                     elif event.key == pygame.K_e:
                         self.pickup_menu_active = False
 
-    # la gestion des niveau des portes 
+    # la gestion des niveau des portes + gestion de la demande des cles
     def open_door_menu(self):
         
         if not self.player.can_move(self.selected_door, self.manor):
@@ -167,65 +182,96 @@ class Game:
         dx, dy = self.manor.get_direction_offset(self.selected_door)
         nx, ny = x + dx, y + dy
 
-        # 1. Vérifier si on se déplace vers une pièce EXISTANTE ---
+        # 1. Si la pièce existe déjà, on bouge
         if self.manor.get_room(nx, ny):
-            # La porte est déjà "ouverte", pas besoin de clé
             self.player.move(self.selected_door, self.manor)
             return
         
-        # 2. Si c'est une NOUVELLE porte, déterminer le niveau de verrouillage ---
-        # Le niveau dépend de la rangée de destination (ny)
-        # Rappel : 0 est en haut (Antechamber), 8 est en bas (Départ)
+        # 2. Calculer le coût de la porte
         lock_level = 0
-        
-        # Logique basée sur votre demande (en partant du bas, row 8)
-        if ny in [8, 7, 6]:    # 3 premières rangées (0-clé)
+        if ny in [8, 7, 6]:
             lock_level = 0
-        elif ny in [5, 4]:     # 2 rangées suivantes (1-clé)
+        elif ny in [5, 4]:
             lock_level = 1
-        elif ny in [3, 2]:     # 2 rangées suivantes (1 ou 2 clés)
+        elif ny in [3, 2]:
             lock_level = random.choice([1, 2])
-        elif ny in [1, 0]:     # 2 dernières rangées (2-clés)
+        elif ny in [1, 0]:
             lock_level = 2
 
-        # 3. Vérifier si le joueur a le Kit de Crochetage (PDF 2.6) ---
+        # 3. Vérifier les outils (Kit de crochetage)
         has_lockpick = any(isinstance(obj, KitCrochetage) for obj in self.player.inventory.permanents)
 
-        # 4. Déterminer les clés requises et vérifier le paiement ---
         required_keys = lock_level
-        msg = None
+        pickaxe_msg = None
 
         if lock_level == 1 and has_lockpick:
-            required_keys = 0  # Le kit ouvre le Niv 1 gratuitement
-            msg = "Vous crochetez la serrure (Niv 1)."
-        elif (lock_level == 1 and not has_lockpick) or lock_level == 2:
-            required_keys = 1  # Le kit n'ouvre pas le Niv 2
+            required_keys = 0
+            pickaxe_msg = "Vous crochetez la serrure (Niv 1)."
         
+        # 4. Vérifier si le joueur peut payer
         if self.player.cles < required_keys:
-            msg = f"Porte verrouillée ! (Niv {lock_level})"
+            self.add_message(f"Porte verrouillée ! (Niv {lock_level})")
             if required_keys > 0:
-                msg = f"Il vous faut {required_keys} clé."
-            return # Le joueur ne peut pas ouvrir
+                self.add_message(f"Il vous faut {required_keys} clé(s).")
+            return
         
-        # 5. Payer le coût en clés ---
+        # 5. Stocker les détails pour la confirmation
+        self.confirm_door_details = {
+            'direction': self.selected_door,
+            'keys': required_keys,
+            'lock_level': lock_level,
+            'pickaxe_msg': pickaxe_msg
+        }
+
+        # 6. Demander confirmation OU ouvrir directement si gratuit
+        if required_keys > 0:
+            # Demander confirmation
+            self.confirm_door_active = True
+            self.add_message(f"Porte Niv {lock_level} ({required_keys} clé). [O]=Ouvrir / [A]=Annuler")
+        else:
+            # C'est gratuit (porte Niv 0 ou crochetage)
+            self._execute_door_opening()
+
+    
+    #
+    def _execute_door_opening(self):
+        # 1. Récupérer les détails stockés
+        details = self.confirm_door_details
+        required_keys = details['keys']
+        direction = details['direction']
+        pickaxe_msg = details['pickaxe_msg']
+
+        # 2. Payer le coût et afficher le message
         if required_keys > 0:
             self.player.cles -= required_keys
-            msg = f"Vous utilisez {required_keys} clé."
-        
-        if msg: # Affiche le message de crochetage
-            self.add_message(msg)
+            self.add_message(f"Vous utilisez {required_keys} clé(s).")
+        elif pickaxe_msg:
+            # Afficher le message de crochetage (si_execute_door_opening)
+            self.add_message(pickaxe_msg)
 
-        # 6. Si tout est bon, ouvrir le menu de tirage ---
-        self.menu_choices = self.manor.draw_three_rooms(self.player.position, self.selected_door, self.manor.pioche)
+        # 3. Ouvrir le menu de tirage des 3 pièces
+        self.menu_choices = self.manor.draw_three_rooms(
+            self.player.position, 
+            direction, 
+            self.manor.pioche
+        )
         
         if not self.menu_choices:
-             self.add_message("eerreur : Aucune pièce compatible trouvée !")
-             # (On pourrait redonner les clés ici si nécessaire)
+             self.add_message("Erreur : Aucune pièce compatible trouvée !")
+             # (On redonne les clés si elles ont été dépensées pour rien)
+             if required_keys > 0:
+                 self.player.cles += required_keys
+             self.confirm_door_active = False
+             self.confirm_door_details = {}
              return
 
         self.menu_index = 0
-        self.menu_active = True
+        self.menu_active = True # Activer le menu des pièces
 
+        # 4. Réinitialiser l'état de confirmation
+        self.confirm_door_active = False
+        self.confirm_door_details = {}
+    
     def reroll_room_choices(self):
         """Benutzt einen Würfel um die 3 Raumoptionen neu zu würfeln."""
         if self.player.des <= 0:
@@ -261,6 +307,14 @@ class Game:
         self.menu_active = False
         self.add_message(f"Pièce ajoutée: {chosen.name}")
 
+
+        # LE BONUS de la piece NURSERY
+        if getattr(self.manor, "bonus_on_draft_bedroom", False):
+            if chosen.name in ("Bedroom", "BunkRoom", "GuestBedroom"):
+                self.player.gagner_pas(5)
+                print("Nursery : +5 pas (draft Bedroom).")
+
+
     def open_object_pickup_menu(self):
         x, y = self.player.position
         room = self.manor.get_room(x, y)
@@ -282,7 +336,7 @@ class Game:
         
         chosen.pick_up(self.player)
 
-        if chosen.should_consume_on_pickup():
+        if chosen in room.objets:
             room.objets.remove(chosen)
         if not room.objets:
             self.pickup_menu_active = False
