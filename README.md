@@ -71,7 +71,7 @@ Une fenêtre Pygame s’ouvre avec le manoir à gauche et le HUD à droite.
 ├── game.py              
 ├── world.py             
 ├── entities.py          
-├── interface.py          
+├── __init__.py         
 │
 └── assets/               Icônes + images des salles
 ```
