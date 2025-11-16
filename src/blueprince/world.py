@@ -3,8 +3,61 @@ import random
 from abc import ABC, abstractmethod
 
 from .entities import (
-    Pomme, Banane, Or, Gemmes, Cles, Des, Pelle, Marteau, EndroitCreuser
+    Pomme, Banane, Or, Gemmes, Cles, Des, Pelle, Marteau, EndroitCreuser, DetecteurMetaux, PatteLapin
 )
+
+
+# ==============================
+# Helper function for random loot
+# ==============================
+def generate_random_loot(player, item_pool, dig_spots_range=None, found_permanents=None):
+    """Generates a random subset of pre-instantiated items.
+
+    Parameters:
+    - player: Player instance or None. If None, luck modifiers are ignored.
+    - item_pool: list[Objet] of candidate instances (duplicates model max quantity).
+    - dig_spots_range: optional (min,max) tuple to append that many EndroitCreuser instances.
+    - found_permanents: optional set of permanent class names already found (skips these).
+
+    Returns:
+    - list[Objet]: randomly selected instances (subset of item_pool plus dig spots).
+    """
+    result = []
+    if found_permanents is None:
+        found_permanents = set()
+
+    # Safely determine luck modifiers (only if player provided)
+    has_rabbits_foot = False
+    has_metal_detector = False
+    if player is not None:
+        try:
+            has_rabbits_foot = any(isinstance(item, PatteLapin) for item in player.inventory.permanents)
+            has_metal_detector = any(isinstance(item, DetecteurMetaux) for item in player.inventory.permanents)
+        except Exception:
+            pass
+
+    luck_multiplier = 1.15 if has_rabbits_foot else 1.0
+
+    for item in item_pool:
+        # Skip permanents bereits gefunden
+        if getattr(item, 'type', None) == 'permanent' and item.__class__.__name__ in found_permanents:
+            continue
+        
+        base_chance = getattr(item, 'base_find_chance', 0.5)
+        is_metallic = getattr(item, 'is_metallic', False)
+        chance = base_chance * luck_multiplier
+        if is_metallic and has_metal_detector:
+            chance *= 1.25
+        if random.random() < chance:
+            result.append(item)
+
+    if dig_spots_range:
+        min_spots, max_spots = dig_spots_range
+        num_spots = random.randint(min_spots, max_spots)
+        for _ in range(num_spots):
+            result.append(EndroitCreuser())
+
+    return result
 
 
 # ==============================
@@ -36,7 +89,7 @@ class ShopEffect:
 
 
 class Room(ABC):
-    def __init__(self, name, image=None, doors=None, gem_cost=0,
+    def __init__(self, name, image=None, doors=None, gem_cost=0, item_pool=None,
                  objets=None, rarity=0, placement_condition="any",
                  color="blue", base_weight=1.0):
         """
@@ -55,11 +108,21 @@ class Room(ABC):
         self.doors = doors if doors else []
         self.original_doors = self.doors.copy()  # Store original door configuration
         self.gem_cost = gem_cost
+        self.item_pool = item_pool if item_pool else []
         self.objets = objets if objets else []
+        # Initial random loot (player luck not applied yet)
+        if self.item_pool:
+            try:
+                initial_loot = generate_random_loot(None, self.item_pool)
+                self.objets.extend(initial_loot)
+            except Exception:
+                pass
         self.rarity = rarity
         self.placement_condition = placement_condition
         self.color = color
         self.rotation = 0  # Track current rotation (0, 90, 180, 270)
+        # Default flag for one-shot effects; subclasses may override
+        self.effect_triggered = False
 
     def has_door(self, direction):
         return direction in self.doors
@@ -77,20 +140,26 @@ class Room(ABC):
         for _ in range(num_rotations):
             rotation_map = {"up": "right", "right": "down", "down": "left", "left": "up"}
             rotated_doors = [rotation_map[d] for d in rotated_doors]
-        
-        # Create new room with rotated properties
-        rotated = Room(
-            name=self.name,
-            image=pygame.transform.rotate(self.image, -90 * num_rotations) if self.image else None,
-            doors=rotated_doors,
-            gem_cost=self.gem_cost,
-            objets=self.objets.copy(),
-            rarity=self.rarity,
-            placement_condition=self.placement_condition
-        )
-        rotated.rotation = (num_rotations * 90) % 360
+
+        rotated_image = pygame.transform.rotate(self.image, -90 * num_rotations) if self.image else None
+
+        # Instantiate without calling subclass __init__ to be able to set fields manually
+        rotated = self.__class__.__new__(self.__class__)
+        # Copy scalar & mutable attributes
+        rotated.name = self.name
+        rotated.image = rotated_image
+        rotated.doors = rotated_doors
         rotated.original_doors = self.original_doors.copy()
-        
+        rotated.gem_cost = self.gem_cost
+        rotated.item_pool = self.item_pool  # Copy item_pool reference
+        rotated.objets = self.objets.copy()
+        rotated.rarity = self.rarity
+        rotated.placement_condition = self.placement_condition
+        rotated.color = self.color  # Copy color
+        rotated.base_weight = self.base_weight  # Copy base_weight
+        rotated.rotation = (num_rotations * 90) % 360
+        rotated.effect_triggered = self.effect_triggered  # Always copy this flag
+            
         return rotated
 
     
@@ -117,8 +186,7 @@ class EntranceHall(Room):
             doors=["up", "left", "right"],
             placement_condition="bottom",
             color="blue",
-            # Start room now provides a shovel so the player can dig here immediately
-            objets=[Pelle(), EndroitCreuser()]
+            objets=[Pelle(), EndroitCreuser()] 
         )
 
 
@@ -127,9 +195,9 @@ class Antechamber(Room):
         super().__init__(
             name="Antechamber",
             image=pygame.image.load("assets/rooms/Blue/Antechamber.png"),
-            doors=["down"],
+            doors=["down", "left", "right"],
             placement_condition="top",
-            color="blue"
+            color="blue",
         )
 
 
@@ -139,16 +207,16 @@ class Antechamber(Room):
 
 class Greenhouse(Room):
     """
-    Greenhouse : dans le jeu original, augmente la probabilité
-    de tirer des pièces vertes.
-    Ici : on met en place un bonus global dans le manoir.
+    Effet : Augmente le bonus de tirage (RÉPÉTABLE).
     """
     def __init__(self):
         super().__init__(
             name="Greenhouse",
             image=pygame.image.load("assets/rooms/Green/Greenhouse.png"),
             doors=["down"],
-            objets=[Gemmes(1)],
+            # Ajout PatteLapin pour disponibilité théorique des permanents
+            item_pool=[Gemmes(4), PatteLapin(), EndroitCreuser(), EndroitCreuser(), Pomme(), Pomme(), Banane(), Banane()],
+            objets=[],
             rarity=1,
             placement_condition="edge",
             color="green"
@@ -162,45 +230,61 @@ class Greenhouse(Room):
             manor.green_draw_bonus = 0
         manor.green_draw_bonus += 1
         print("Greenhouse : bonus de tirage de pièces vertes augmenté.")
-
+        
+        # Generate random loot
+        found_perms = getattr(manor, 'found_permanents', set())
+        loot = generate_random_loot(player, self.item_pool, found_permanents=found_perms)
+        self.objets.extend(loot)
+        print(f"Greenhouse : {len(loot)} objets générés.")
 
 class MorningRoom(Room):
     """
-    Morning Room : donne des gemmes.
-    Version simple : +2 gemmes à l'entrée.
+    Effet : Donne +2 gemmes (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="Morning Room",
             image=pygame.image.load("assets/rooms/Green/Morning_Room.png"),
             doors=["down", "left"],
+            item_pool=[Gemmes(2), EndroitCreuser(), Pelle()],
             rarity=1,
             placement_condition="edge",
             color="green"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         player.gemmes += 2
         print("Morning Room : vous gagnez 2 gemmes.")
+        
+        manor = getattr(player, "manor", None)
+        found_perms = getattr(manor, 'found_permanents', set()) if manor else set()
+        loot = generate_random_loot(player, self.item_pool, found_permanents=found_perms)
+        self.objets.extend(loot)
+        self.effect_triggered = True 
 
 
 class SecretGarden(Room):
     """
-    Secret Garden : disperse des fruits (Pomme, Banane) dans
-    plusieurs autres pièces déjà placées dans le manoir.
+    Effet : Disperse des fruits (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="SecretGarden",
             image=pygame.image.load("assets/rooms/Green/Secret_Garden.png"),
             doors=["left", "right", "down"],
-            objets=[Gemmes(1)],
+            item_pool=[Gemmes(1), Pomme(), Pomme(), Pomme(), Banane(), Banane(), Banane(), EndroitCreuser(), EndroitCreuser()],
             rarity=2,
             placement_condition="edge",
             color="green"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         manor = getattr(player, "manor", None)
         if manor is None:
             return
@@ -221,87 +305,82 @@ class SecretGarden(Room):
                     if room and room is not self:
                         if random.random() < 0.20:
                             room.objets.append(random.choice(fruits))
-
+        
+        self.effect_triggered = True 
 
 
 class Veranda(Room):
     """
-    Veranda : augmente les chances de trouver des objets
-    dans les futures pièces vertes.
-    Ici : on active un flag global dans le manoir.
+    Effet : Active un flag (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="Veranda",
             image=pygame.image.load("assets/rooms/Green/Veranda.png"),
             doors=["up", "down"],
+            gem_cost=2,
+            item_pool=[Gemmes(1), EndroitCreuser()],
             rarity=1,
             placement_condition="edge",
             color="green"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         manor = getattr(player, "manor", None)
         if manor is None:
             return
         manor.green_item_bonus = True
         print("Veranda : bonus d'objets dans les futures pièces vertes activé.")
+        self.effect_triggered = True 
 
 
 class Cloister(Room):
-    """
-    Cloister : pas d'effet particulier, seulement une pièce verte.
-    """
     def __init__(self):
         super().__init__(
             name="Cloister",
             image=pygame.image.load("assets/rooms/Green/Cloister.png"),
             doors=["left", "right", "up", "down"],
+            gem_cost=3,
+            item_pool=[Gemmes(2), EndroitCreuser(), EndroitCreuser(), Cles(1)],
             rarity=1,
             placement_condition="center",
             color="green"
         )
 
-    def apply_effect_on_enter(self, player):
-        # Aucun effet pour cette pièce
-        pass
-
-
 class Courtyard(Room):
-    """
-    Courtyard : pas d'effet particulier, pièce verte neutre.
-    """
     def __init__(self):
         super().__init__(
             name="Courtyard",
             image=pygame.image.load("assets/rooms/Green/Courtyard.png"),
             doors=["left", "right", "down"],
+            item_pool=[Or(3), EndroitCreuser(), EndroitCreuser(), Pomme(), Pomme(), Banane(), Banane()],
             rarity=1,
             placement_condition="center",
             color="green"
         )
 
-    def apply_effect_on_enter(self, player):
-        # Aucun effet pour cette pièce
-        pass
-
-
 class Patio(Room):
     """
-    Patio : ajoute des gemmes dans chaque pièce verte déjà
-    existante sur le manoir.
+    Effet : Ajoute des gemmes aux pièces (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="Patio",
             image=pygame.image.load("assets/rooms/Green/Patio.png"),
             doors=["left", "down"],
+            item_pool=[Gemmes(1), EndroitCreuser(), EndroitCreuser()],
             rarity=2,
             placement_condition="edge",
             color="green"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         manor = getattr(player, "manor", None)
         if manor is None:
             return
@@ -312,30 +391,35 @@ class Patio(Room):
                 room = manor.get_room(x, y)
                 if room and getattr(room, "color", "") == "green":
                     room.objets.append(Gemmes(1))
+        
+        self.effect_triggered = True # <-- CORRECTION
 
 
 class Terrace(Room):
     """
-    Terrace : les pièces vertes deviennent gratuites à tirer.
-    Ici : on active un flag dans le manoir, et draw_three_rooms
-    met gem_cost = 0 pour toutes les pièces vertes.
+    Effet : Active un flag (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="Terrace",
             image=pygame.image.load("assets/rooms/Green/Terrace.png"),
             doors=["down"],
+            item_pool=[Or(2), EndroitCreuser()],
             rarity=1,
             placement_condition="edge",
             color="green"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         manor = getattr(player, "manor", None)
         if manor is None:
             return
         manor.green_rooms_free = True
         print("Terrace : toutes les pièces vertes deviennent gratuites à tirer.")
+        self.effect_triggered = True 
 
 
 # ==============================
@@ -344,41 +428,41 @@ class Terrace(Room):
 
 class HerLadyshipsChamber(Room):
     """
-    Effets :
-    - Le prochain passage dans Boudoir donne +10 pas
-    - Le prochain passage dans Walk-in Closet donne +3 gemmes
-    Effets à usage unique.
+    Effet : Active des bonus (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="HerLadyshipsChamber",
             image=pygame.image.load("assets/rooms/Purple/Her_Ladyships_Chamber.png"),
             doors=["down"],
+            item_pool=[Gemmes(2), Cles(1), Des(1)],
             rarity=2,
             placement_condition="any",
             color="purple"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         manor = player.manor
-
-        # Activer deux bonus one-shot
         manor.bonus_next_boudoir_steps = 10
         manor.bonus_next_walkin_gems = 3
-
         print("Her Ladyship’s Chamber : prochain Boudoir = +10 pas, prochain Walk-in Closet = +3 gemmes.")
+        self.effect_triggered = True 
 
 
 class MasterBedroom(Room):
     """
-    Effet :
-    - Quand on entre : +1 pas pour chaque pièce déjà placée dans le manoir.
+    Effet : Donne des pas
     """
     def __init__(self):
         super().__init__(
             name="MasterBedroom",
             image=pygame.image.load("assets/rooms/Purple/Master_Bedroom.png"),
             doors=["down"],
+            gem_cost=2,
+            item_pool=[Gemmes(1), Cles(1)],
             rarity=2,
             placement_condition="any",
             color="purple"
@@ -386,45 +470,45 @@ class MasterBedroom(Room):
 
     def apply_effect_on_enter(self, player):
         manor = player.manor
-
-        # Compter les pièces placées (sauf None)
         count = sum(1 for y in range(manor.HEIGHT) for x in range(manor.WIDTH) if manor.get_room(x, y))
-
         player.gagner_pas(count)
         print(f"Master Bedroom : +{count} pas (nombre total de pièces placées).")
 
 
 class Nursery(Room):
     """
-    Effet :
-    - À chaque fois que vous draft une pièce Bedroom : +5 pas
-    Bonus persistant.
+    Effet : Active un bonus 
     """
     def __init__(self):
         super().__init__(
             name="Nursery",
             image=pygame.image.load("assets/rooms/Purple/Nursery.png"),
             doors=["down"],
+            item_pool=[Pomme(), Des(1)],
             rarity=1,
             placement_condition="any",
             color="purple"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         player.manor.bonus_on_draft_bedroom = True
         print("Nursery : désormais, chaque draft d'une Bedroom donne +5 pas.")
+        self.effect_triggered = True 
 
 
 class ServantsQuarters(Room):
     """
-    Effet :
-    - À l'entrée : +1 clé pour chaque Bedroom dans le manoir.
+    Effet : Donne des clés (RÉPÉTABLE).
     """
     def __init__(self):
         super().__init__(
             name="ServantsQuarters",
             image=pygame.image.load("assets/rooms/Purple/Servants_Quarters.png"),
             doors=["down"],
+            item_pool=[Cles(2)],
             rarity=1,
             placement_condition="any",
             color="purple"
@@ -432,8 +516,6 @@ class ServantsQuarters(Room):
 
     def apply_effect_on_enter(self, player):
         manor = player.manor
-
-        # Compter les pièces Bedroom et Bunk Room (qui compte comme 2)
         count = 0
         for y in range(manor.HEIGHT):
             for x in range(manor.WIDTH):
@@ -443,7 +525,7 @@ class ServantsQuarters(Room):
                 if room.name == "Bedroom":
                     count += 1
                 elif room.name == "BunkRoom":
-                    count += 2  # Compte double
+                    count += 2  
 
         player.cles += count
         print(f"Servant’s Quarters : +{count} clés (nombre total de Bedrooms).")
@@ -451,14 +533,14 @@ class ServantsQuarters(Room):
 
 class Bedroom(Room):
     """
-    Effet :
-    - Chaque fois qu'on entre dans cette pièce : +2 pas
+    Effet : Donne +2 pas 
     """
     def __init__(self):
         super().__init__(
             name="Bedroom",
             image=pygame.image.load("assets/rooms/Purple/Bedroom.png"),
             doors=["left", "down"],
+            item_pool=[Gemmes(1), Des(1)],
             rarity=0,
             placement_condition="any",
             color="purple"
@@ -471,9 +553,7 @@ class Bedroom(Room):
 
 class Boudoir(Room):
     """
-    Effet : aucun par défaut.
-    Mais si Her Ladyship’s Chamber a activé un bonus :
-    - +10 pas la prochaine fois
+    Effet : Consomme un bonus 
     """
     def __init__(self):
         super().__init__(
@@ -487,7 +567,7 @@ class Boudoir(Room):
 
     def apply_effect_on_enter(self, player):
         manor = player.manor
-        # Bonus one-shot depuis Ladyship
+        # Bonus one-shot (consomme le flag, donc doit être vérifié à chaque fois)
         if getattr(manor, "bonus_next_boudoir_steps", 0) > 0:
             bonus = manor.bonus_next_boudoir_steps
             player.gagner_pas(bonus)
@@ -496,11 +576,6 @@ class Boudoir(Room):
 
 
 class BunkRoom(Room):
-    """
-    Effet :
-    - Cette pièce compte comme 2 Bedrooms
-    Effet géré par les autres pièces (Servant’s Quarters, Nursery).
-    """
     def __init__(self):
         super().__init__(
             name="BunkRoom",
@@ -511,29 +586,28 @@ class BunkRoom(Room):
             color="purple"
         )
 
-    def apply_effect_on_enter(self, player):
-        # Aucun effet direct
-        print("Bunk Room : compte comme 2 Bedrooms.")
-
-
 class GuestBedroom(Room):
     """
-    Effet :
-    - À l'entrée : +10 pas
+    Effet : Donne +10 pas (UNE SEULE FOIS, selon votre règle).
     """
     def __init__(self):
         super().__init__(
             name="GuestBedroom",
             image=pygame.image.load("assets/rooms/Purple/GuestBedroom.png"),
             doors=["down"],
+            item_pool=[Gemmes(1), Or(4)],
             rarity=1,
             placement_condition="any",
             color="purple"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         player.gagner_pas(10)
         print("Guest Bedroom : +10 pas.")
+        self.effect_triggered = True 
 
 
 # ==============================
@@ -541,25 +615,16 @@ class GuestBedroom(Room):
 # ==============================
 
 class Corridor(Room):
-    """
-    Corridor : toujours non verrouillé.
-    Dans ta version : aucun système de portes verrouillées,
-    donc effet passif neutre.
-    """
     def __init__(self):
         super().__init__(
             name="Corridor",
             image=pygame.image.load("assets/rooms/Orange/Corridor.png"),
             doors=["up", "down"],
+            item_pool=[Or(3), Cles(1), DetecteurMetaux()],
             rarity=0,
             placement_condition="any",
             color="orange"
         )
-
-    def apply_effect_on_enter(self, player):
-        # Aucun effet actif dans ta version actuelle
-        print("Corridor : portes toujours considérées ouvertes.")
-
 
 class EastWingHall(Room):
     def __init__(self):
@@ -567,11 +632,11 @@ class EastWingHall(Room):
             name="EastWingHall",
             image=pygame.image.load("assets/rooms/Orange/East_Wing_Hall.png"),
             doors=["left", "right", "down"],
+            item_pool=[Or(3), Cles(1), EndroitCreuser()],
             rarity=1,
             placement_condition="any",
             color="orange"
         )
-
 
 class WestWingHall(Room):
     def __init__(self):
@@ -579,11 +644,11 @@ class WestWingHall(Room):
             name="WestWingHall",
             image=pygame.image.load("assets/rooms/Orange/West_Wing_Hall.png"),
             doors=["left", "right", "down"],
+            item_pool=[Or(4), Cles(2), EndroitCreuser(), EndroitCreuser()],
             rarity=1,
             placement_condition="any",
             color="orange"
         )
-
 
 class Hallway(Room):
     def __init__(self):
@@ -591,11 +656,11 @@ class Hallway(Room):
             name="Hallway",
             image=pygame.image.load("assets/rooms/Orange/Hallway.png"),
             doors=["left", "right", "down"],
+            item_pool=[Or(2), Cles(2), Des(1)],
             rarity=0,
             placement_condition="any",
             color="orange"
         )
-
 
 class Passageway(Room):
     def __init__(self):
@@ -603,17 +668,13 @@ class Passageway(Room):
             name="Passageway",
             image=pygame.image.load("assets/rooms/Orange/Passageway.png"),
             doors=["left", "right", "up", "down"],
+            item_pool=[Or(2), Cles(1)],
             rarity=0,
             placement_condition="any",
             color="orange"
         )
 
-
 class GreatHall(Room):
-    """
-    Great Hall : "7 locked doors" dans le vrai jeu.
-    Pour l’instant : pièce orange normale.
-    """
     def __init__(self):
         super().__init__(
             name="GreatHall",
@@ -624,45 +685,53 @@ class GreatHall(Room):
             color="orange"
         )
 
-
 class Foyer(Room):
     """
-    Foyer : Les portes de Hallways sont toujours déverrouillées.
+    Effet : Active un flag (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="Foyer",
             image=pygame.image.load("assets/rooms/Orange/Foyer.png"),
             doors=["up", "down"],
+            gem_cost=2,
+            item_pool=[Or(3), Cles(1)],
             rarity=2,
             placement_condition="any",
             color="orange"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         player.manor.hallway_doors_unlocked = True
         print("Foyer : toutes les portes de Hallway sont déverrouillées.")
+        self.effect_triggered = True 
 
 
 class SecretPassage(Room):
     """
-    Secret Passage :
-    - Permet de choisir la prochaine couleur de pièce à tirer.
-    On active un flag dans le manoir, géré plus tard.
+    Effet : Active un flag (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="SecretPassage",
             image=pygame.image.load("assets/rooms/Orange/Secret_Passage.png"),
             doors=["down"],
+            item_pool=[Gemmes(1), Des(1)],
             rarity=3,
             placement_condition="any",
             color="orange"
         )
+        self.effect_triggered = False
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         player.manor.next_room_color_choice = True
         print("Secret Passage : vous pourrez choisir la couleur du prochain tirage.")
+        self.effect_triggered = True 
 
 
 # ==============================
@@ -671,23 +740,23 @@ class SecretPassage(Room):
 
 class LockerRoom(Room):
     """
-    Locker Room :
-    Effet : "Spread keys throughout the house."
-    -> Répartit des clés dans plusieurs pièces.
-    -> Si ConferenceRoom a été visitée, toutes ces clés vont
-       dans cette ConferenceRoom (redirection globale).
+    Effet : Répartit des clés (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="LockerRoom",
             image=pygame.image.load("assets/rooms/Blue/Locker_Room.png"),
             doors=["up", "down"],
+            item_pool=[Or(3), Gemmes(2), Cles(4)],
             rarity=1,
             placement_condition="any",
             color="blue"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         manor = getattr(player, "manor", None)
         if manor is None:
             return
@@ -696,7 +765,6 @@ class LockerRoom(Room):
 
         if target_conf is not None:
             print("Locker Room : les clés sont redirigées vers la Conference Room.")
-            # On simule une "répartition" en ajoutant plusieurs clés dans la Conference Room
             for _ in range(manor.WIDTH * manor.HEIGHT):
                 if random.random() < 0.20:
                     target_conf.objets.append(Cles(1))
@@ -708,60 +776,71 @@ class LockerRoom(Room):
                     if room and room is not self:
                         if random.random() < 0.20:
                             room.objets.append(Cles(1))
+                            
+        self.effect_triggered = True 
 
 
 class Vault(Room):
     """
-    Vault :
-    Effet : "+40 coins" lorsqu'on entre dans la salle.
+    Effet : Donne +40 Or (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="Vault",
             image=pygame.image.load("assets/rooms/Blue/Vault.png"),
             doors=["down"],  # cul-de-sac
+            gem_cost=3,
+            item_pool=[Or(40), Gemmes(3), Cles(1)],
             rarity=3,
             placement_condition="edge",
             color="blue"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         player.or_ += 40
         print("Vault : vous gagnez 40 pièces d'or.")
+        self.effect_triggered = True 
 
 
 class Workshop(Room):
     """
-    Workshop :
-    Effet simplifié : donne un objet permanent aléatoire au joueur.
+    Effet : Donne un objet permanent (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="Workshop",
             image=pygame.image.load("assets/rooms/Blue/Workshop.png"),
             doors=["up", "down"],
+            item_pool=[Pelle(), Marteau(), DetecteurMetaux(), PatteLapin()],
             rarity=2,
             placement_condition="center",
             color="blue"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
-        permanents = [Pelle(), Marteau()]
+        if self.effect_triggered: return 
+        
+        permanents = [Pelle(), Marteau(), DetecteurMetaux(), PatteLapin()]
         item = random.choice(permanents)
         player.inventory.add_item(item)
         print(f"Workshop : vous obtenez un objet permanent ({item.nom}).")
+        self.effect_triggered = True 
 
 
 class BoilerRoom(Room):
     """
-    Boiler Room :
-    Effet simplifié : source d'énergie -> +3 pas.
+    Effet : Donne +3 pas (RÉPÉTABLE).
     """
     def __init__(self):
         super().__init__(
             name="BoilerRoom",
             image=pygame.image.load("assets/rooms/Blue/Boiler_Room.png"),
             doors=["left", "down", "right"],
+            item_pool=[EndroitCreuser(), DetecteurMetaux(), Or(3)],
             rarity=2,
             placement_condition="center",
             color="blue"
@@ -774,79 +853,87 @@ class BoilerRoom(Room):
 
 class ConferenceRoom(Room):
     """
-    Conference Room :
-    Effet : "Whenever items would be spread throughout the house,
-             they are placed in this room instead."
-    -> Active un pointeur global dans le manoir pour rediriger
-       tous les effets de type 'spread' (SecretGarden, LockerRoom).
+    Effet : Active un 'aimant' (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="ConferenceRoom",
             image=pygame.image.load("assets/rooms/Blue/Conference_Room.png"),
             doors=["down", "left", "right"],
+            item_pool=[Or(4), Gemmes(1), Cles(1), DetecteurMetaux()],
             rarity=2,
             placement_condition="center",
             color="blue"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         manor = player.manor
         manor.redirect_spread_to_conference = self
         print("Conference Room : tous les futurs effets 'spread' seront redirigés ici.")
+        self.effect_triggered = True 
 
 
 class Gallery(Room):
     """
-    Gallery :
-    Effet simplifié : +1 gemme à l'entrée.
+    Effet : Donne +1 gemme (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="Gallery",
             image=pygame.image.load("assets/rooms/Blue/Gallery.png"),
             doors=["up", "down"],
+            item_pool=[Gemmes(1), Or(2)],
             rarity=1,
             placement_condition="center",
             color="blue"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         player.gemmes += 1
         print("Gallery : vous gagnez 1 gemme.")
+        self.effect_triggered = True 
 
 
 class Garage(Room):
     """
-    Garage :
-    Effet : +3 clés.
+    Effet : Donne +3 clés (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="Garage",
             image=pygame.image.load("assets/rooms/Blue/Garage.png"),
             doors=["down"],
+            item_pool=[Or(2)],
             rarity=1,
             placement_condition="any",
             color="blue"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return
+        
         player.cles += 3
         print("Garage : vous gagnez 3 clés.")
+        self.effect_triggered = True 
 
 
 class Library(Room):
     """
-    Library :
-    Effet : "Discover less common floor plans while drafting"
-    -> augmente un biais de rareté dans le manoir.
+    Effet : Augmente le bonus de rareté (RÉPÉTABLE).
     """
     def __init__(self):
         super().__init__(
             name="Library",
             image=pygame.image.load("assets/rooms/Blue/Library.png"),
             doors=["left", "down"],
+            item_pool=[Gemmes(1), Des(1), PatteLapin()],
             rarity=1,
             placement_condition="any",
             color="blue"
@@ -860,74 +947,87 @@ class Library(Room):
 
 class RumpusRoom(Room):
     """
-    Rumpus Room :
-    Effet : +8 pièces.
+    Effet : Donne +8 Or (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="RumpusRoom",
             image=pygame.image.load("assets/rooms/Blue/Rumpus_Room.png"),
             doors=["up", "down"],
+            item_pool=[Or(8), Banane(), Des(2), Cles(2), Gemmes(1)],
             rarity=1,
             placement_condition="any",
             color="blue"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         player.or_ += 8
         print("Rumpus Room : +8 pièces d'or.")
+        self.effect_triggered = True 
 
 
 class Pantry(Room):
     """
-    Pantry (version bleue) :
-    Effet : +4 pièces.
+    Effet : Donne +4 Or (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="Pantry",
             image=pygame.image.load("assets/rooms/Blue/Pantry.png"),
             doors=["left", "down"],
+            item_pool=[Or(4), Pomme(), Banane()],
             rarity=0,
             placement_condition="any",
             color="blue"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         player.or_ += 4
         print("Pantry : +4 pièces d'or.")
+        self.effect_triggered = True 
 
 
 class Room8(Room):
     """
-    Room 8 :
-    Effet simplifié : +1 gemme.
+    Effet : Donne +1 gemme (UNE SEULE FOIS).
     """
     def __init__(self):
         super().__init__(
             name="Room8",
             image=pygame.image.load("assets/rooms/Blue/Room_8.png"),
             doors=["left", "down"],
+            item_pool=[Or(5), Gemmes(2), Banane(), Cles(1)],
             rarity=1,
             placement_condition="any",
             color="blue"
         )
+        self.effect_triggered = False 
 
     def apply_effect_on_enter(self, player):
+        if self.effect_triggered: return 
+        
         player.gemmes += 1
         print("Room 8 : +1 gemme.")
+        self.effect_triggered = True 
 
 
 class Rotunda(Room):
     """
-    Rotunda :
-    Effet : "Can rotate" -> on fait tourner ses portes.
+    Effet : Fait tourner les portes (RÉPÉTABLE).
     """
     def __init__(self):
         super().__init__(
             name="Rotunda",
             image=pygame.image.load("assets/rooms/Blue/Rotunda.png"),
             doors=["down", "left"],
+            gem_cost=3,
+            item_pool=[Or(4), Gemmes(1)],
             rarity=2,
             placement_condition="center",
             color="blue"
@@ -941,6 +1041,7 @@ class Rotunda(Room):
             new_doors.append(mapping.get(d, d))
         self.doors = new_doors
         print(f"Rotunda : les portes ont tourné, nouvelles portes = {self.doors}")
+        
 
 
 # ==============================
@@ -1045,67 +1146,62 @@ class Armory(ShopEffect, Room):
 
 
 # ==============================
-# Catalogue complet
+# Catalogue / Factory
 # ==============================
-ROOM_CATALOG = [
-    EntranceHall(),
-    Antechamber(),
+def build_room_catalog():
+    """Construit un nouveau catalogue d'instances fraîches pour une partie.
+    Évite la réutilisation d'objets mutés entre plusieurs runs (ROOM_CATALOG global)."""
+    return [
+        EntranceHall(),
+        Antechamber(),
 
-    # ---- GREEN ----
-    Greenhouse(),
-    MorningRoom(),
-    SecretGarden(),
-    Veranda(),
-    Cloister(),
-    Courtyard(),
-    Patio(),
-    Terrace(),
+        # ---- GREEN ----
+        Greenhouse(),
+        MorningRoom(),
+        SecretGarden(),
+        Veranda(),
+        Cloister(),
+        Courtyard(),
+        Patio(),
+        Terrace(),
 
-    # ---- PURPLE ----
-    HerLadyshipsChamber(),
-    MasterBedroom(),
-    Nursery(),
-    ServantsQuarters(),
-    Bedroom(),
-    Boudoir(),
-    BunkRoom(),
-    GuestBedroom(),
+        # ---- PURPLE ----
+        HerLadyshipsChamber(),
+        MasterBedroom(),
+        Nursery(),
+        ServantsQuarters(),
+        Bedroom(),
+        Boudoir(),
+        BunkRoom(),
+        GuestBedroom(),
 
-    # ---- ORANGE ROOMS ----
-    Corridor(),
-    EastWingHall(),
-    WestWingHall(),
-    Hallway(),
-    Passageway(),
-    GreatHall(),
-    Foyer(),
-    SecretPassage(),
+        # ---- ORANGE ROOMS ----
+        Corridor(),
+        EastWingHall(),
+        WestWingHall(),
+        Hallway(),
+        Passageway(),
+        GreatHall(),
+        Foyer(),
+        SecretPassage(),
 
-    # Blue rooms
-    LockerRoom(),
-    Vault(),
-    Workshop(),
-    BoilerRoom(),
-    ConferenceRoom(),
-    Gallery(),
-    Garage(),
-    Library(),
-    RumpusRoom(),
-    Pantry(),
-    Room8(),
-    Rotunda(),
+        # Blue rooms
+        LockerRoom(),
+        Vault(),
+        Workshop(),
+        BoilerRoom(),
+        ConferenceRoom(),
+        Gallery(),
+        Garage(),
+        Library(),
+        RumpusRoom(),
+        Pantry(),
+        Room8(),
+        Rotunda(),
+    ]
 
-    # ---- YELLOW ROOMS (Magasins) ----
-    Bookshop(),
-    Commissary(),
-    Kitchen(),
-    LaundryRoom(),
-    Locksmith(),
-    GiftShop(),
-    Showroom(),
-    Armory(),
-
-]
+# Garder un catalogue initial si besoin ailleurs (non utilisé pour les nouvelles parties)
+ROOM_CATALOG = build_room_catalog()
 
 
 # ==============================
@@ -1126,10 +1222,9 @@ class Manor:
         # Grille de pièces
         self.grid = [[None for _ in range(self.WIDTH)] for _ in range(self.HEIGHT)]
 
-        # Catalogue sans les pièces fixes
-        self.room_catalog = [
-            r for r in ROOM_CATALOG if r.name not in ("EntranceHall", "Antechamber")
-        ]
+        # Catalogue frais pour cette instance
+        fresh_catalog = build_room_catalog()
+        self.room_catalog = [r for r in fresh_catalog if r.name not in ("EntranceHall", "Antechamber")]
         self.pioche = self.room_catalog
 
         # Effets globaux liés aux pièces vertes
@@ -1152,10 +1247,13 @@ class Manor:
         # Biais de rareté (Library)
         self.rarity_bias = 0
 
+        # Tracking für gefundene permanente Objekte (wird von Game gesetzt)
+        self.found_permanents = set()
 
 
 
         # Placement fixe du Hall d'entrée et de l'Antechamber
+        # Placer de nouvelles instances fraîches (pas celles du catalogue supprimées)
         self.place_room(2, 8, EntranceHall())
         self.place_room(2, 0, Antechamber())
 

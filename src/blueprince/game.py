@@ -75,6 +75,11 @@ class Game:
         self.player.game = self
         self.player.set_message_callback(self.add_message)
         self.running = True
+        
+        # === Tracking für gefundene Permanents (verhindert Respawn) ===
+        self.found_permanents = set()
+        # Referenz für Manor, damit Rooms darauf zugreifen können
+        self.manor.found_permanents = self.found_permanents
 
         # === Sélecteur de porte + menu ===
         self.selected_door = "up"
@@ -413,18 +418,40 @@ class Game:
 
     def confirm_pickup_choice(self):
         """Valide le choix de l'objet à ramasser."""
+        # Bounds check to prevent IndexError
+        if not self.pickup_choices or self.pickup_index >= len(self.pickup_choices):
+            self.pickup_menu_active = False
+            return
+        
         chosen = self.pickup_choices[self.pickup_index]
         x, y = self.player.position
         room = self.manor.get_room(x, y)
         if not room:
             return
         
+        # Track permanents global, um Respawn zu verhindern
+        if chosen.type == "permanent":
+            self.found_permanents.add(chosen.__class__.__name__)
+        
         chosen.pick_up(self.player)
-
-        if chosen in room.objets:
+        # Ne retirer l'objet que s'il doit réellement être consommé.
+        remove_after = True
+        if hasattr(chosen, 'should_consume_on_pickup'):
+            try:
+                remove_after = chosen.should_consume_on_pickup()
+            except Exception:
+                remove_after = True
+        if remove_after and chosen in room.objets:
             room.objets.remove(chosen)
-        if not room.objets:
+        
+        # Update pickup_choices to reflect current room state and reset index
+        self.pickup_choices = room.objets
+        if not self.pickup_choices:
             self.pickup_menu_active = False
+            self.pickup_index = 0
+        else:
+            # Keep index valid after removal
+            self.pickup_index = min(self.pickup_index, len(self.pickup_choices) - 1)
 
     def check_end_conditions(self):
         # 1) Lose: plus de pas
@@ -456,6 +483,9 @@ class Game:
         self.manor = Manor()
         self.player = Player("Player", self.manor)
         self.player.set_message_callback(self.add_message)
+        # Reset tracking für permanente Objekte
+        self.found_permanents = set()
+        self.manor.found_permanents = self.found_permanents
         self.selected_door = "up"
         self.menu_active = False
         self.menu_choices = []
