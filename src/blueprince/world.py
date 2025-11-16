@@ -13,7 +13,7 @@ from .entities import (
 class Room(ABC):
     def __init__(self, name, image=None, doors=None, gem_cost=0,
                  objets=None, rarity=0, placement_condition="any",
-                 color="blue"):
+                 color="blue", base_weight=1.0):
         """
         name : nom interne de la pièce
         image : surface pygame (image de la pièce)
@@ -24,6 +24,7 @@ class Room(ABC):
         placement_condition : "any", "edge", "center", "top", "bottom"
         color : "blue", "green", "purple", "yellow", "orange", "red"
         """
+        self.base_weight = base_weight
         self.name = name
         self.image = image
         self.doors = doors if doors else []
@@ -1042,6 +1043,22 @@ class Manor:
                 self.room_catalog.remove(catalog_room)
                 break
 
+    def get_room_weight(self, room):
+        """Poids = base_weight × (1/3)^rarity × bonus verts × bonus rareté."""
+        w = room.base_weight * (1.0 / 3.0) ** room.rarity
+
+        # Bonus Greenhouse
+        if getattr(self, "green_draw_bonus", 0) > 0 and room.color == "green":
+            w *= (1 + self.green_draw_bonus)
+
+        # Bonus Library (pièces rarity >= 2)
+        if getattr(self, "rarity_bias", 0) > 0 and room.rarity >= 2:
+            w *= (1 + self.rarity_bias)
+
+        return w
+
+
+
     # ---------------- tirage de pièces ----------------
     def draw_three_rooms(self, current_pos, direction, room_catalog):
         """
@@ -1126,33 +1143,37 @@ class Manor:
             filtered_rooms[0].gem_cost = 0
             free_rooms = [filtered_rooms[0]]
 
+        # garantir une pièce gratuite
         choices = []
+        first_pick = random.choice(free_rooms)
+        choices.append(first_pick)
 
-        # Forcer au moins une pièce gratuite
-        choices.append(random.choice(free_rooms))
+        # calcul des poids
+        pool = [r for r in filtered_rooms if r not in choices]
+        weights = [self.get_room_weight(r) for r in pool]
 
-        weighted_pool = list(filtered_rooms)
-
-        # Effet Greenhouse : favoriser les pièces vertes
-        greens = [r for r in filtered_rooms if getattr(r, "color", "") == "green"]
-        if self.green_draw_bonus > 0 and greens:
-            weighted_pool += greens * self.green_draw_bonus
-
-        # Effet Library : favoriser les pièces rares (rarity >= 2)
-        if self.rarity_bias > 0:
-            rares = [r for r in filtered_rooms if getattr(r, "rarity", 0) >= 2]
-            if rares:
-                weighted_pool += rares * self.rarity_bias
-
-
-        # Tirer jusqu'à 2 autres pièces, sans doublon
-        while len(choices) < 3 and len(choices) < len(filtered_rooms):
-            # on évite de re-tirer un doublon
-            candidates = [r for r in weighted_pool if r not in choices]
-            if not candidates:
+        # tirage des 2 autres rooms
+        for _ in range(2):
+            if not pool:
                 break
-            picked = random.choice(candidates)
-            choices.append(picked)
+            total_w = sum(weights)
+            r = random.random() * total_w
+
+            cum = 0
+            idx = 0
+            for i, w in enumerate(weights):
+                cum += w
+                if r <= cum:
+                    idx = i
+                    break
+
+            # Ajouter la pièce tirée
+            choices.append(pool[idx])
+
+            # Retirer du pool
+            del pool[idx]
+            del weights[idx]
+
 
         # If no compatible rooms, return empty (should not happen normally)
         if not possible_rooms:
