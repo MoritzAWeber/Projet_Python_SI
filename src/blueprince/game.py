@@ -42,6 +42,12 @@ class Game:
         self.font_title = pygame.font.SysFont("arial", 28, bold=True)
         self.font_text = pygame.font.SysFont("arial", 22)
         self.font_small = pygame.font.SysFont("arial", 20)
+        
+         # === SHOP MENU ===
+        self.shop_menu_active = False
+        self.shop_choices = []
+        self.shop_index = 0
+        self.current_shop_room = None
 
         # === Chargement des icônes d’inventaire ===
         def load_icon(path):
@@ -53,6 +59,7 @@ class Game:
                 surf.fill((120, 120, 120))
                 return surf
 
+        
         self.icons = {
             "steps": load_icon("assets/icons/steps.png"),
             "coin": load_icon("assets/icons/coin.png"),
@@ -65,6 +72,7 @@ class Game:
         self.clock = pygame.time.Clock()
         self.manor = Manor()
         self.player = Player("Player", self.manor)
+        self.player.game = self
         self.player.set_message_callback(self.add_message)
         self.running = True
 
@@ -88,6 +96,12 @@ class Game:
         #demenade d'ouvrir la porte 
         self.confirm_door_active = False  # Nouvel état pour la confirmation
         self.confirm_door_details = {}    # Pour mémoriser quelle porte on ouvre
+    
+    
+    def is_in_shop_room(self):
+        x, y = self.player.position
+        room = self.manor.get_room(x, y)
+        return getattr(room, "color", None) == "yellow"
 
     # ====================== BOUCLE PRINCIPALE ======================
     def run(self):
@@ -106,61 +120,44 @@ class Game:
                 self.running = False
 
             elif event.type == pygame.KEYDOWN:
+                # --- ESC pour quitter ---
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
 
-                # If game over or victory: only allow restart or exit
+                # --- Si game over / victoire ---
                 if self.game_over or self.victory:
                     if event.key == pygame.K_r:
                         self.restart_game()
                     continue
-                
-                elif self.confirm_door_active:
-                    if event.key == pygame.K_o:
-                        # OUI : Le joueur confirme
+
+                # --- Confirmation ouverture de porte ---
+                if self.confirm_door_active:
+                    if event.key == pygame.K_o:   # OUI
                         self._execute_door_opening()
-                    elif event.key == pygame.K_a:
-                        # NON : Le joueur annule
+                    elif event.key == pygame.K_a: # NON
                         self.confirm_door_active = False
                         self.confirm_door_details = {}
                         self.add_message("Action annulée.")
+                    continue
 
-                # ---- Navigation principale ----
-                elif not self.menu_active and not self.pickup_menu_active and not self.confirm_door_active:
-                    if event.key in (pygame.K_z, pygame.K_w):
-                        self.player.move("up", self.manor)
-                    elif event.key == pygame.K_s:
-                        self.player.move("down", self.manor)
-                    elif event.key == pygame.K_q:
-                        self.player.move("left", self.manor)
-                    elif event.key == pygame.K_d:
-                        self.player.move("right", self.manor)
-                    elif event.key == pygame.K_UP:
-                        self.selected_door = "up"
+                # ============================================================
+                # MODE SHOP (magasin jaune)
+                # ============================================================
+                if self.shop_menu_active:
+                    if event.key == pygame.K_UP:
+                        self.shop_index = (self.shop_index - 1) % len(self.shop_items)
                     elif event.key == pygame.K_DOWN:
-                        self.selected_door = "down"
-                    elif event.key == pygame.K_LEFT:
-                        self.selected_door = "left"
-                    elif event.key == pygame.K_RIGHT:
-                        self.selected_door = "right"
+                        self.shop_index = (self.shop_index + 1) % len(self.shop_items)
                     elif event.key == pygame.K_SPACE:
-                        self.open_door_menu()
+                        self.confirm_shop_choice()
                     elif event.key == pygame.K_e:
-                        self.open_object_pickup_menu()
+                        self.shop_menu_active = False
+                    continue
 
-                # ---- Menu actif ----
-                elif self.menu_active:
-                    if event.key == pygame.K_LEFT:
-                        self.menu_index = (self.menu_index - 1) % len(self.menu_choices)
-                    elif event.key == pygame.K_RIGHT:
-                        self.menu_index = (self.menu_index + 1) % len(self.menu_choices)
-                    elif event.key == pygame.K_SPACE:
-                        self.confirm_room_choice()
-                    elif event.key == pygame.K_r:
-                        self.reroll_room_choices()
-                
-                # ---- Ramasser des objets ----
-                elif self.pickup_menu_active:
+                # ============================================================
+                # MODE PICKUP (ramasser objets)
+                # ============================================================
+                if self.pickup_menu_active:
                     if event.key == pygame.K_UP:
                         self.pickup_index = (self.pickup_index - 1) % len(self.pickup_choices)
                     elif event.key == pygame.K_DOWN:
@@ -169,6 +166,57 @@ class Game:
                         self.confirm_pickup_choice()
                     elif event.key == pygame.K_e:
                         self.pickup_menu_active = False
+                    continue
+
+                # ============================================================
+                # MENU DE TIRAGE (3 pièces)
+                # ============================================================
+                if self.menu_active:
+                    if event.key == pygame.K_LEFT:
+                        self.menu_index = (self.menu_index - 1) % len(self.menu_choices)
+                    elif event.key == pygame.K_RIGHT:
+                        self.menu_index = (self.menu_index + 1) % len(self.menu_choices)
+                    elif event.key == pygame.K_SPACE:
+                        self.confirm_room_choice()
+                    elif event.key == pygame.K_r:
+                        self.reroll_room_choices()
+                    continue
+
+                # ============================================================
+                # NAVIGATION NORMALE (aucun menu actif)
+                # ============================================================
+                if event.key in (pygame.K_z, pygame.K_w):
+                    self.player.move("up", self.manor)
+                elif event.key == pygame.K_s:
+                    self.player.move("down", self.manor)
+                elif event.key == pygame.K_q:
+                    self.player.move("left", self.manor)
+                elif event.key == pygame.K_d:
+                    self.player.move("right", self.manor)
+
+                # Sélection de la porte
+                elif event.key == pygame.K_UP:
+                    self.selected_door = "up"
+                elif event.key == pygame.K_DOWN:
+                    self.selected_door = "down"
+                elif event.key == pygame.K_LEFT:
+                    self.selected_door = "left"
+                elif event.key == pygame.K_RIGHT:
+                    self.selected_door = "right"
+
+                # Ouvrir porte
+                elif event.key == pygame.K_SPACE:
+                    self.open_door_menu()
+
+                # ============================================================
+                # TOUCHE E — Ouvrir soit SHOP
+                # ============================================================
+                elif event.key == pygame.K_e:
+                    if self.is_in_shop_room():
+                        self.open_shop_menu(None)
+                    else:
+                        self.open_object_pickup_menu()
+
 
     # la gestion des niveau des portes + gestion de la demande des cles
     def open_door_menu(self):
@@ -321,6 +369,37 @@ class Game:
                 print("Nursery : +5 pas (draft Bedroom).")
 
 
+    # choix de objet a echanger contre de l'or dans les pieces jaunes
+    def open_shop_menu(self, shop_room):
+            # --- empêcher ouverture si un autre menu est actif ---
+            if self.menu_active or self.pickup_menu_active or self.confirm_door_active:
+                return
+
+            # --- items du shop ---
+            self.shop_items = [
+            ("Pomme", 2, lambda player: player.gagner_pas(2)),
+            ("Banane", 3, lambda player: player.gagner_pas(3)),
+            ("Gâteau", 8, lambda player: player.gagner_pas(10)),
+            ("Clé", 10, lambda player: setattr(player, "cles", player.cles + 1)),
+            ("Gemme", 3, lambda player: setattr(player, "gemmes", player.gemmes + 1)),
+        ]
+
+            self.shop_index = 0
+            self.shop_menu_active = True
+            self.current_shop_room = shop_room
+            self.add_message("Magasin")
+
+    def confirm_shop_choice(self):
+            name, cost, effect = self.shop_items[self.shop_index]
+
+            if self.player.or_ < cost:
+                self.add_message(f"Pas assez d'or pour acheter {name}.")
+                return
+
+            self.player.or_ -= cost
+            effect(self.player)
+            self.add_message(f"Achat : {name} pour {cost} or.")
+
     def open_object_pickup_menu(self):
         x, y = self.player.position
         room = self.manor.get_room(x, y)
@@ -435,7 +514,8 @@ class Game:
             self.draw_victory_overlay()
         elif self.game_over:
             self.draw_game_over_overlay()
-
+        if self.shop_menu_active:
+            self.draw_shop_menu(hud_rect)
         pygame.display.flip()
 
     # ====================== DESSINS HUD ======================
@@ -523,7 +603,6 @@ class Game:
             y += 22
 
     def draw_room_choice_menu(self, hud_rect):
-        """Dessine le menu des 3 pièces tirées."""
         color = self.COLOR_TEXT
         base_y = hud_rect.top + 400
         base_x = hud_rect.left + 50
@@ -584,6 +663,36 @@ class Game:
             surf = self.font_small.render(msg, True, self.COLOR_TEXT)
             self.screen.blit(surf, (x, y))
             y += 22
+
+    def draw_shop_menu(self, hud_rect):
+        x = hud_rect.left + 280
+        y = hud_rect.top + 40
+
+        title = self.font_title.render("Magasin:", True, self.COLOR_TEXT)
+        self.screen.blit(title, (x, y))
+        y += 40
+
+        if not self.shop_menu_active:
+            # MODE PASSIF : comme les objets
+            hint = self.font_small.render("E: ouvrir le menu", True, self.COLOR_TEXT)
+            self.screen.blit(hint, (x, y))
+            return
+
+        # MODE ACTIF (menu ouvert)
+        for i, (name, cost, _) in enumerate(self.shop_items):
+            color = (255, 215, 0) if i == self.shop_index else self.COLOR_TEXT
+            line = self.font_small.render(f"{i+1}. {name} - {cost} or", True, color)
+            self.screen.blit(line, (x, y))
+            y += 22
+
+        y += 5
+        hint = self.font_small.render("E: fermer le menu", True, self.COLOR_TEXT)
+        self.screen.blit(hint, (x, y))
+
+        hint2 = self.font_small.render("UP/DOWN + SPACE: acheter", True, self.COLOR_TEXT)
+        self.screen.blit(hint2, (x, y + 22))
+
+
 
     def draw_room_objects(self, hud_rect):
         """Shows the objects in the current Room"""

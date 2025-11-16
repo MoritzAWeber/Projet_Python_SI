@@ -34,6 +34,19 @@ class Game:
         self.font_text = pygame.font.SysFont("arial", 22)
         self.font_small = pygame.font.SysFont("arial", 20)
 
+        # === SHOP MENU (pour les pièces jaunes) ===
+        self.shop_menu_active = False
+        self.shop_index = 0
+        self.shop_items = [
+            ("Pomme", 2, lambda player: player.gagner_pas(2)),
+            ("Banane", 3, lambda player: player.gagner_pas(3)),
+            ("Gâteau", 8, lambda player: player.gagner_pas(10)),
+            ("Sandwich", 12, lambda player: player.gagner_pas(15)),
+            ("Repas", 20, lambda player: player.gagner_pas(25)),
+            ("Clé", 10, lambda player: setattr(player, "cles", player.cles + 1)),
+            ("Gemme", 3, lambda player: setattr(player, "gemmes", player.gemmes + 1)),
+        ]
+
         # === Chargement et redimensionnement des icônes ===
         def load_icon(path):
             try:
@@ -76,21 +89,66 @@ class Game:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
-                elif event.key in (pygame.K_z, pygame.K_UP):
-                    self.player.move("up", self.manor)
-                elif event.key in (pygame.K_s, pygame.K_DOWN):
-                    self.player.move("down", self.manor)
-                elif event.key in (pygame.K_q, pygame.K_LEFT):
-                    self.player.move("left", self.manor)
-                elif event.key in (pygame.K_d, pygame.K_RIGHT):
-                    self.player.move("right", self.manor)
+
+                # ======================
+                # 1) NAVIGATION NORMALE
+                # ======================
+                elif not self.shop_menu_active:
+                    if event.key in (pygame.K_z, pygame.K_UP):
+                        self.player.move("up", self.manor)
+                    elif event.key in (pygame.K_s, pygame.K_DOWN):
+                        self.player.move("down", self.manor)
+                    elif event.key in (pygame.K_q, pygame.K_LEFT):
+                        self.player.move("left", self.manor)
+                    elif event.key in (pygame.K_d, pygame.K_RIGHT):
+                        self.player.move("right", self.manor)
+
+                    # Touche E = ouvrir menu shop si pièce jaune
+                    elif event.key == pygame.K_e:
+                        self.try_open_shop()
+
+                # ======================
+                # 2) MENU DU SHOP
+                # ======================
+                elif self.shop_menu_active:
+                    if event.key == pygame.K_UP:
+                        self.shop_index = (self.shop_index - 1) % len(self.shop_items)
+                    elif event.key == pygame.K_DOWN:
+                        self.shop_index = (self.shop_index + 1) % len(self.shop_items)
+                    elif event.key == pygame.K_SPACE:
+                        self.confirm_shop_purchase()
+                    elif event.key == pygame.K_e:
+                        self.shop_menu_active = False
+
+    # ========================= SHOP LOGIC =========================
+
+    def try_open_shop(self):
+        """Ouvre le shop si on est dans une pièce jaune."""
+        rx, ry = self.player.position
+        room = self.manor.get_room(rx, ry)
+        if not room:
+            return
+
+        if getattr(room, "color", None) == "yellow":
+            self.shop_menu_active = True
+            self.shop_index = 0
+
+    def confirm_shop_purchase(self):
+        """Achète l'objet sélectionné."""
+        name, cost, effect = self.shop_items[self.shop_index]
+
+        if self.player.or_ < cost:
+            return  # pas assez d'or
+
+        self.player.or_ -= cost
+        effect(self.player)
 
     # ====================== AFFICHAGE ======================
     def render(self):
         # --- 1. Zone du manoir ---
         self.screen.fill(self.COLOR_BG, (0, 0, self.game_width, self.window_height))
 
-        # --- 2. Dessiner les pièces découvertes ---
+        # --- 2. Dessiner les pièces ---
         for y in range(self.ROWS):
             for x in range(self.COLS):
                 room = self.manor.get_room(x, y)
@@ -108,11 +166,11 @@ class Game:
                     else:
                         pygame.draw.rect(self.screen, (100, 100, 100), rect)
 
-        # --- 3. Panneau HUD ---
+        # --- 3. HUD ---
         hud_rect = pygame.Rect(self.game_width, 0, self.hud_width, self.window_height)
         pygame.draw.rect(self.screen, self.COLOR_HUD, hud_rect)
 
-        # --- 4. Dessiner le joueur ---
+        # --- 4. Joueur ---
         px, py = self.player.position
         player_rect = pygame.Rect(
             px * self.cell_size + self.margin + 20,
@@ -122,25 +180,43 @@ class Game:
         )
         pygame.draw.rect(self.screen, self.COLOR_PLAYER, player_rect)
 
-        # --- 5. Inventaire dynamique ---
+        # --- 5. Inventaire ---
         self.draw_inventory(self.player, hud_rect)
 
-        # --- 6. Rafraîchissement ---
+        # --- 6. Menu du shop ---
+        if self.shop_menu_active:
+            self.draw_shop_menu(hud_rect)
+
         pygame.display.flip()
+
+    # ====================== HUD SHOP ======================
+    def draw_shop_menu(self, hud_rect):
+        x = hud_rect.left + 40
+        y = hud_rect.top + 350
+
+        title = self.font_title.render("Magasin :", True, self.COLOR_TEXT)
+        self.screen.blit(title, (x, y))
+        y += 60
+
+        for i, (name, cost, _) in enumerate(self.shop_items):
+            color = (255, 200, 0) if i == self.shop_index else self.COLOR_TEXT
+            line = self.font_small.render(f"{name} - {cost} or", True, color)
+            self.screen.blit(line, (x, y))
+            y += 30
+
+        hint = self.font_small.render("↑↓ choisir  |  SPACE acheter  |  E fermer", True, self.COLOR_TEXT)
+        self.screen.blit(hint, (x, y + 20))
 
     # ====================== INVENTAIRE ======================
     def draw_inventory(self, player, hud_rect):
-        """Affiche l'inventaire du joueur (HUD à droite)."""
         margin_x = hud_rect.left + 40
         y = hud_rect.top + 40
         color = self.COLOR_TEXT
 
-        # === Titre ===
         title = self.font_title.render("Inventory:", True, color)
         self.screen.blit(title, (margin_x, y))
         y += 50
 
-        # === Liste des stats ===
         stats = [
             ("steps", player.pas),
             ("coin", player.or_),
@@ -154,25 +230,12 @@ class Game:
             self.screen.blit(icon, (margin_x, y))
             val_text = self.font_text.render(str(value), True, color)
             self.screen.blit(val_text, (margin_x + 45, y + 6))
-            y += 45  # espacement régulier
+            y += 45
 
-        # === Ligne de séparation ===
         pygame.draw.line(self.screen, (180, 180, 180),
                          (margin_x, y + 10),
                          (margin_x + 200, y + 10), 1)
 
-        # === Objets permanents ===
-        y += 30
-        if player.inventory.permanents:
-            label = self.font_text.render("Objets permanents :", True, color)
-            self.screen.blit(label, (margin_x, y))
-            y += 30
-            for obj in player.inventory.permanents:
-                text = self.font_small.render(f"- {obj.nom}", True, color)
-                self.screen.blit(text, (margin_x + 15, y))
-                y += 25
-
-        # === Nom de la pièce actuelle ===
         current_room = self.manor.get_room(*player.position)
         if current_room:
             y += 40
