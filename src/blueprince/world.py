@@ -84,7 +84,8 @@ class ShopEffect:
     ]
 
     def apply_effect_on_enter(self, player):
-        pass
+        if hasattr(player, "game"):
+            player.game.open_shop_menu(self)
 
 
 
@@ -1053,7 +1054,7 @@ class Bookshop(ShopEffect, Room):
         super().__init__(
             name="Bookshop",
             image=pygame.image.load("assets/rooms/Yellow/Bookshop.png"),
-            doors=["left", "right", "down"],
+            doors=["left", "down"],
             rarity=1,
             placement_condition="any",
             color="yellow"
@@ -1077,7 +1078,7 @@ class Kitchen(ShopEffect, Room):
         super().__init__(
             name="Kitchen",
             image=pygame.image.load("assets/rooms/Yellow/Kitchen.png"),
-            doors=["left", "right", "down"],
+            doors=["down"],
             rarity=0,
             placement_condition="any",
             color="yellow"
@@ -1101,7 +1102,7 @@ class Locksmith(ShopEffect, Room):
         super().__init__(
             name="Locksmith",
             image=pygame.image.load("assets/rooms/Yellow/Locksmith.png"),
-            doors=["left", "right", "down"],
+            doors=["down"],
             rarity=2,
             placement_condition="any",
             color="yellow"
@@ -1113,7 +1114,7 @@ class GiftShop(ShopEffect, Room):
         super().__init__(
             name="GiftShop",
             image=pygame.image.load("assets/rooms/Yellow/Mount_Holly_Gift_Shop.png"),
-            doors=["left", "down"],
+            doors=["left", "down", "right"],
             rarity=1,
             placement_condition="any",
             color="yellow"
@@ -1125,7 +1126,7 @@ class Showroom(ShopEffect, Room):
         super().__init__(
             name="Showroom",
             image=pygame.image.load("assets/rooms/Yellow/Showroom.png"),
-            doors=["left", "right", "down"],
+            doors=["up", "down"],
             rarity=2,
             placement_condition="any",
             color="yellow"
@@ -1198,6 +1199,16 @@ def build_room_catalog():
         Pantry(),
         Room8(),
         Rotunda(),
+
+        # Yellow
+        Bookshop(),
+        Commissary(),
+        Kitchen(),
+        LaundryRoom(),
+        Locksmith(),
+        GiftShop(),
+        Showroom(),
+        Armory(),
     ]
 
 # Garder un catalogue initial si besoin ailleurs (non utilisé pour les nouvelles parties)

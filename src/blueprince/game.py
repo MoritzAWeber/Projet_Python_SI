@@ -125,6 +125,7 @@ class Game:
                 self.running = False
 
             elif event.type == pygame.KEYDOWN:
+
                 # --- ESC pour quitter ---
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
@@ -146,7 +147,7 @@ class Game:
                     continue
 
                 # ============================================================
-                # MODE SHOP (magasin jaune)
+                # MODE SHOP (menu actif)
                 # ============================================================
                 if self.shop_menu_active:
                     if event.key == pygame.K_UP:
@@ -155,7 +156,7 @@ class Game:
                         self.shop_index = (self.shop_index + 1) % len(self.shop_items)
                     elif event.key == pygame.K_SPACE:
                         self.confirm_shop_choice()
-                    elif event.key == pygame.K_e:
+                    elif event.key == pygame.K_m:
                         self.shop_menu_active = False
                     continue
 
@@ -188,7 +189,7 @@ class Game:
                     continue
 
                 # ============================================================
-                # NAVIGATION NORMALE (aucun menu actif)
+                # NAVIGATION NORMALE
                 # ============================================================
                 if event.key in (pygame.K_z, pygame.K_w):
                     self.player.move("up", self.manor)
@@ -199,7 +200,7 @@ class Game:
                 elif event.key == pygame.K_d:
                     self.player.move("right", self.manor)
 
-                # Sélection de la porte
+                # Sélecteur de porte
                 elif event.key == pygame.K_UP:
                     self.selected_door = "up"
                 elif event.key == pygame.K_DOWN:
@@ -214,13 +215,24 @@ class Game:
                     self.open_door_menu()
 
                 # ============================================================
-                # TOUCHE E — Ouvrir soit SHOP
+                # TOUCHE M — ouvrir/fermer le shop uniquement en pièce jaune
+                # ============================================================
+                elif event.key == pygame.K_m:
+                    if self.is_in_shop_room():
+                        if self.shop_menu_active:
+                            self.shop_menu_active = False
+                        else:
+                            self.open_shop_menu(None)
+                    continue
+
+                # ============================================================
+                # TOUCHE E — objets seulement
                 # ============================================================
                 elif event.key == pygame.K_e:
-                    if self.is_in_shop_room():
-                        self.open_shop_menu(None)
-                    else:
+                    if not self.is_in_shop_room():
                         self.open_object_pickup_menu()
+
+
 
 
     # la gestion des niveau des portes + gestion de la demande des cles
@@ -375,13 +387,14 @@ class Game:
 
 
     # choix de objet a echanger contre de l'or dans les pieces jaunes
+    ####################################################################
     def open_shop_menu(self, shop_room):
-            # --- empêcher ouverture si un autre menu est actif ---
-            if self.menu_active or self.pickup_menu_active or self.confirm_door_active:
-                return
+    # empêcher ouverture si un autre menu est actif
+        if self.menu_active or self.pickup_menu_active or self.confirm_door_active:
+            return
 
-            # --- items du shop ---
-            self.shop_items = [
+        # items du shop
+        self.shop_items = [
             ("Pomme", 2, lambda player: player.gagner_pas(2)),
             ("Banane", 3, lambda player: player.gagner_pas(3)),
             ("Gâteau", 8, lambda player: player.gagner_pas(10)),
@@ -389,10 +402,10 @@ class Game:
             ("Gemme", 3, lambda player: setattr(player, "gemmes", player.gemmes + 1)),
         ]
 
-            self.shop_index = 0
-            self.shop_menu_active = True
-            self.current_shop_room = shop_room
-            self.add_message("Magasin")
+        self.shop_index = 0
+        self.shop_menu_active = True
+        self.current_shop_room = shop_room
+
 
     def confirm_shop_choice(self):
             name, cost, effect = self.shop_items[self.shop_index]
@@ -694,33 +707,35 @@ class Game:
             self.screen.blit(surf, (x, y))
             y += 22
 
+
     def draw_shop_menu(self, hud_rect):
         x = hud_rect.left + 280
         y = hud_rect.top + 40
 
-        title = self.font_title.render("Magasin:", True, self.COLOR_TEXT)
+        title = self.font_title.render("Magasin :", True, self.COLOR_TEXT)
         self.screen.blit(title, (x, y))
         y += 40
 
+        # Mode passif : menu fermé
         if not self.shop_menu_active:
-            # MODE PASSIF : comme les objets
-            hint = self.font_small.render("E: ouvrir le menu", True, self.COLOR_TEXT)
+            hint = self.font_small.render("M: ouvrir le menu", True, self.COLOR_TEXT)
             self.screen.blit(hint, (x, y))
             return
 
-        # MODE ACTIF (menu ouvert)
+        # Mode actif : menu ouvert
         for i, (name, cost, _) in enumerate(self.shop_items):
             color = (255, 215, 0) if i == self.shop_index else self.COLOR_TEXT
-            line = self.font_small.render(f"{i+1}. {name} - {cost} or", True, color)
+            text = f"{i+1}. {name} - {cost} or"
+            line = self.font_small.render(text, True, color)
             self.screen.blit(line, (x, y))
             y += 22
 
         y += 5
-        hint = self.font_small.render("E: fermer le menu", True, self.COLOR_TEXT)
-        self.screen.blit(hint, (x, y))
-
-        hint2 = self.font_small.render("UP/DOWN + SPACE: acheter", True, self.COLOR_TEXT)
+        hint1 = self.font_small.render("M: fermer le menu", True, self.COLOR_TEXT)
+        hint2 = self.font_small.render("UP/DOWN + SPACE : acheter", True, self.COLOR_TEXT)
+        self.screen.blit(hint1, (x, y))
         self.screen.blit(hint2, (x, y + 22))
+
 
 
 
