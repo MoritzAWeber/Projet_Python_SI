@@ -19,7 +19,7 @@ class Player:
         self.or_ = 0            
         self.gemmes = 2         # Commence avec 2
         self.cles = 10           # Commence avec 0 
-        self.des = 0            # Commence avec 0 
+        self.des = 3          # Commence avec 0 
 
         self.manor = manor
         
@@ -192,6 +192,14 @@ class Objet(ABC):
         self.nom = nom
         self.description = description
         self.type_ = type_objet
+        # Alias pour compatibilité (certains endroits utilisent .type)
+        self.type = type_objet
+        # Métadonnées par défaut pour la génération de butin
+        # Les sous-classes peuvent les surcharger en tant qu'attributs de classe
+        if not hasattr(self, "is_metallic"):
+            self.is_metallic = False
+        if not hasattr(self, "base_find_chance"):
+            self.base_find_chance = 0.5
         super().__init__()
 
     @abstractmethod
@@ -247,6 +255,8 @@ class Cles(ObjetConsommable):
     """Clés permettant d'ouvrir portes et coffres."""
     def __init__(self, valeur):
         super().__init__("Cle", "Permet d'ouvrir des portes verrouillées", valeur)
+        # Augmenter la chance de base pour apparaître
+        self.base_find_chance = 0.75
 
     def pick_up(self, player):
         player.cles += self.valeur
@@ -269,14 +279,14 @@ class ObjetPermanent(Objet):
         super().__init__(nom, description, "permanent")
 
     def pick_up(self, player):
-        """Ajoute l’objet permanent à l’inventaire et applique son effet."""
+        """Ajoute l'objet permanent à l'inventaire et applique son effet."""
         player.inventory.add_item(self)
         self.appliquer_effet(player)   # ← appelle l'effet spécifique
         player.add_message(f"Objet permanent obtenu : {self.nom}")
 
     def should_consume_on_pickup(self):
-        """Ne jamais consommer un permanent : il reste en inventaire."""
-        return False
+        """Retirer l'objet de la liste après ramassage (reste en inventaire)."""
+        return True
 
     def appliquer_effet(self, player):
         """Chaque sous-classe définit son propre effet."""
@@ -288,6 +298,8 @@ class Pelle(ObjetPermanent):
     """Permet de creuser certains endroits"""
     def __init__(self):
         super().__init__("Pelle", "Permet de creuser à certains endroits.")
+        self.is_metallic = True
+        self.base_find_chance = 0.35
 
     def appliquer_effet(self, player):
         player.add_message("Le joueur peut maintenant creuser des trous")
@@ -297,6 +309,8 @@ class Marteau(ObjetPermanent):
     """Permet d’ouvrir les coffres sans clé"""
     def __init__(self):
         super().__init__("Marteau", "Permet d’ouvrir des coffres sans clé")
+        self.is_metallic = True
+        self.base_find_chance = 0.6
 
     def appliquer_effet(self, player):
         player.add_message("Le joueur peut ouvrir les coffres sans clé")
@@ -306,6 +320,8 @@ class KitCrochetage(ObjetPermanent):
     """Permet d’ouvrir les portes de niveau 1 sans clé"""
     def __init__(self):
         super().__init__("Kit de crochetage", "Permet d’ouvrir les portes de niveau 1 sans clé")
+        self.is_metallic = True
+        self.base_find_chance = 0.8
 
     def appliquer_effet(self, player):
         player.add_message("Le joueur peut crocheter les portes de niveau 1")
@@ -315,6 +331,9 @@ class DetecteurMetaux(ObjetPermanent):
     """Augmente les chances de trouver des clés et des pieces"""
     def __init__(self):
         super().__init__("Détecteur de métaux", "Augmente les chances de trouver des clés et de l'or")
+        self.is_metallic = True
+        # Réduction de la probabilité de base pour équilibrer plus large distribution
+        self.base_find_chance = 0.35
 
     def appliquer_effet(self, player):
         player.add_message("Le joueur augmente ses chances de trouver des objets utiles")
@@ -324,6 +343,8 @@ class PatteLapin(ObjetPermanent):
     """Augmente la probabilité de trouver des objets rares"""
     def __init__(self):
         super().__init__("Patte de lapin", "Augmente la chance de trouver des objets rares")
+        # Ajout d'une probabilité explicite plus faible (par défaut c'était ~0.5 implicite)
+        self.base_find_chance = 0.25
 
     def appliquer_effet(self, player):
         player.add_message("Le joueur devient plus chanceux")
@@ -426,16 +447,6 @@ class Coffre(AutreObjet):
         ]
         reward = random.choice(rewards)
         reward.pick_up(player)
-        # Luck system: chance for extra distinct reward (Patte de lapin / Veranda indirectly via manor)
-        manor = getattr(player, 'manor', None)
-        luck_mult = manor.get_luck_multiplier(player) if manor and hasattr(manor, 'get_luck_multiplier') else 1.0
-        extra_chance = 0.25 * luck_mult  # base 25%, scaled by luck
-        if random.random() < extra_chance:
-            remaining = [r for r in rewards if r is not reward]
-            if remaining:
-                extra = random.choice(remaining)
-                extra.pick_up(player)
-                player.add_message(f"Chance supplémentaire : {extra.nom} obtenu !")
 
 
     def should_consume_on_pickup(self):
@@ -465,11 +476,6 @@ class EndroitCreuser(AutreObjet):
             if player.inventory.has_permanent("Détecteur de métaux"):
                 chance += 0.2  # +20% better luck
                 player.add_message("Le détecteur de métaux augmente vos chances!")
-            # Global luck multiplier (Patte de lapin + Veranda)
-            manor = getattr(player, 'manor', None)
-            if manor and hasattr(manor, 'get_luck_multiplier'):
-                luck_mult = manor.get_luck_multiplier(player)
-                chance += (luck_mult - 1.0) * 0.25  # translate multiplicative luck into additive chance bump
             
             if chance < 0.3:
                 player.add_message("Vous ne trouvez rien...")
@@ -538,21 +544,10 @@ class Casier(AutreObjet):
             Gemmes(random.randint(1, 2)),
             Pas(random.randint(5, 15))
         ]
-        base_count = random.randint(1, 3)
-        manor = getattr(player, 'manor', None)
-        luck_mult = manor.get_luck_multiplier(player) if manor and hasattr(manor, 'get_luck_multiplier') else 1.0
-        # Luck: small chance to add one more item if not already max
-        if base_count < 3 and random.random() < 0.30 * luck_mult:
-            base_count += 1
-        reward = random.sample(rewards, base_count)
+        reward = random.sample(rewards, random.randint(1, 3))
         for item in reward:
             item.pick_up(player)
             player.add_message(f"Vous avez trouvé: {item.nom} dans le casier!")
-        # Additional low probability metallic bonus
-        if random.random() < 0.20 * (luck_mult - 1.0 + 1):
-            bonus = random.choice([Cles(1), Or(random.randint(1,3))])
-            bonus.pick_up(player)
-            player.add_message(f"Bonus de chance : {bonus.nom} supplémentaire!")
 
     def should_consume_on_pickup(self):
         """Détermine si l'objet doit être consommé immédiatement après la collecte."""
