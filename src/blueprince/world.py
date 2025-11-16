@@ -132,14 +132,14 @@ class Room(ABC):
         rotated.doors = rotated_doors
         rotated.original_doors = self.original_doors.copy()
         rotated.gem_cost = self.gem_cost
+        rotated.item_pool = self.item_pool  # Copy item_pool reference
         rotated.objets = self.objets.copy()
         rotated.rarity = self.rarity
         rotated.placement_condition = self.placement_condition
+        rotated.color = self.color  # Copy color
+        rotated.base_weight = self.base_weight  # Copy base_weight
         rotated.rotation = (num_rotations * 90) % 360
-
-        
-        if hasattr(self, 'effect_triggered'):
-            rotated.effect_triggered = self.effect_triggered
+        rotated.effect_triggered = self.effect_triggered  # Always copy this flag
             
         return rotated
     
@@ -175,7 +175,7 @@ class Antechamber(Room):
         super().__init__(
             name="Antechamber",
             image=pygame.image.load("assets/rooms/Blue/Antechamber.png"),
-            doors=["down"],
+            doors=["down", "left", "right"],
             placement_condition="top",
             color="blue",
         )
@@ -324,7 +324,7 @@ class Cloister(Room):
             image=pygame.image.load("assets/rooms/Green/Cloister.png"),
             doors=["left", "right", "up", "down"],
             gem_cost=3,
-            item_pool=[Gemmes(2), EndroitCreuser(), EndroitCreuser(), Cles(1), Cles(1)],
+            item_pool=[Gemmes(2), EndroitCreuser(), EndroitCreuser(), Cles(1)],
             rarity=1,
             placement_condition="center",
             color="green"
@@ -415,7 +415,7 @@ class HerLadyshipsChamber(Room):
             name="HerLadyshipsChamber",
             image=pygame.image.load("assets/rooms/Purple/Her_Ladyships_Chamber.png"),
             doors=["down"],
-            item_pool=[Gemmes(2), Cles(1), Cles(1), Des(1)],
+            item_pool=[Gemmes(2), Cles(1), Des(1)],
             rarity=2,
             placement_condition="any",
             color="purple"
@@ -442,7 +442,7 @@ class MasterBedroom(Room):
             image=pygame.image.load("assets/rooms/Purple/Master_Bedroom.png"),
             doors=["down"],
             gem_cost=2,
-            item_pool=[Gemmes(1), Cles(1), Cles(1)],
+            item_pool=[Gemmes(1), Cles(1)],
             rarity=2,
             placement_condition="any",
             color="purple"
@@ -488,7 +488,7 @@ class ServantsQuarters(Room):
             name="ServantsQuarters",
             image=pygame.image.load("assets/rooms/Purple/Servants_Quarters.png"),
             doors=["down"],
-            item_pool=[Cles(1), Cles(1), Cles(1)],
+            item_pool=[Cles(2)],
             rarity=1,
             placement_condition="any",
             color="purple"
@@ -600,7 +600,7 @@ class Corridor(Room):
             name="Corridor",
             image=pygame.image.load("assets/rooms/Orange/Corridor.png"),
             doors=["up", "down"],
-            item_pool=[Or(3), Cles(1), Cles(1), DetecteurMetaux()],
+            item_pool=[Or(3), Cles(1), DetecteurMetaux()],
             rarity=0,
             placement_condition="any",
             color="orange"
@@ -612,7 +612,7 @@ class EastWingHall(Room):
             name="EastWingHall",
             image=pygame.image.load("assets/rooms/Orange/East_Wing_Hall.png"),
             doors=["left", "right", "down"],
-            item_pool=[Or(3), Cles(1), Cles(1), EndroitCreuser()],
+            item_pool=[Or(3), Cles(1), EndroitCreuser()],
             rarity=1,
             placement_condition="any",
             color="orange"
@@ -624,7 +624,7 @@ class WestWingHall(Room):
             name="WestWingHall",
             image=pygame.image.load("assets/rooms/Orange/West_Wing_Hall.png"),
             doors=["left", "right", "down"],
-            item_pool=[Or(4), Cles(1), Cles(1), EndroitCreuser(), EndroitCreuser()],
+            item_pool=[Or(4), Cles(2), EndroitCreuser(), EndroitCreuser()],
             rarity=1,
             placement_condition="any",
             color="orange"
@@ -636,7 +636,7 @@ class Hallway(Room):
             name="Hallway",
             image=pygame.image.load("assets/rooms/Orange/Hallway.png"),
             doors=["left", "right", "down"],
-            item_pool=[Or(2), Cles(1), Cles(1), Des(1)],
+            item_pool=[Or(2), Cles(2), Des(1)],
             rarity=0,
             placement_condition="any",
             color="orange"
@@ -648,7 +648,7 @@ class Passageway(Room):
             name="Passageway",
             image=pygame.image.load("assets/rooms/Orange/Passageway.png"),
             doors=["left", "right", "up", "down"],
-            item_pool=[Or(2), Cles(1), Cles(1)],
+            item_pool=[Or(2), Cles(1)],
             rarity=0,
             placement_condition="any",
             color="orange"
@@ -675,7 +675,7 @@ class Foyer(Room):
             image=pygame.image.load("assets/rooms/Orange/Foyer.png"),
             doors=["up", "down"],
             gem_cost=2,
-            item_pool=[Or(3), Cles(1), Cles(1)],
+            item_pool=[Or(3), Cles(1)],
             rarity=2,
             placement_condition="any",
             color="orange"
@@ -727,7 +727,7 @@ class LockerRoom(Room):
             name="LockerRoom",
             image=pygame.image.load("assets/rooms/Blue/Locker_Room.png"),
             doors=["up", "down"],
-            item_pool=[Or(3), Gemmes(2), Cles(1), Cles(1), Cles(1), Cles(1)],
+            item_pool=[Or(3), Gemmes(2), Cles(4)],
             rarity=1,
             placement_condition="any",
             color="blue"
@@ -770,7 +770,7 @@ class Vault(Room):
             image=pygame.image.load("assets/rooms/Blue/Vault.png"),
             doors=["down"],  # cul-de-sac
             gem_cost=3,
-            item_pool=[Or(40), Gemmes(3), Cles(1), Cles(1)],
+            item_pool=[Or(40), Gemmes(3), Cles(1)],
             rarity=3,
             placement_condition="edge",
             color="blue"
@@ -840,7 +840,7 @@ class ConferenceRoom(Room):
             name="ConferenceRoom",
             image=pygame.image.load("assets/rooms/Blue/Conference_Room.png"),
             doors=["down", "left", "right"],
-            item_pool=[Or(4), Gemmes(1), Cles(1), Cles(1), DetecteurMetaux()],
+            item_pool=[Or(4), Gemmes(1), Cles(1), DetecteurMetaux()],
             rarity=2,
             placement_condition="center",
             color="blue"
@@ -889,7 +889,7 @@ class Garage(Room):
             name="Garage",
             image=pygame.image.load("assets/rooms/Blue/Garage.png"),
             doors=["down"],
-            item_pool=[Cles(1), Cles(1), Cles(1), Cles(1), Or(2)],
+            item_pool=[Or(2)],
             rarity=1,
             placement_condition="any",
             color="blue"
@@ -934,7 +934,7 @@ class RumpusRoom(Room):
             name="RumpusRoom",
             image=pygame.image.load("assets/rooms/Blue/Rumpus_Room.png"),
             doors=["up", "down"],
-            item_pool=[Or(8), Banane(), Des(2), Cles(1), Cles(1), Gemmes(1)],
+            item_pool=[Or(8), Banane(), Des(2), Cles(2), Gemmes(1)],
             rarity=1,
             placement_condition="any",
             color="blue"
@@ -982,7 +982,7 @@ class Room8(Room):
             name="Room8",
             image=pygame.image.load("assets/rooms/Blue/Room_8.png"),
             doors=["left", "down"],
-            item_pool=[Or(5), Gemmes(2), Banane(), Cles(1), Cles(1)],
+            item_pool=[Or(5), Gemmes(2), Banane(), Cles(1)],
             rarity=1,
             placement_condition="any",
             color="blue"
