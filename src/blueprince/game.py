@@ -23,7 +23,7 @@ class Game:
         self.max_messages = 3
 
         self.game_width = self.COLS * self.cell_size
-        self.hud_width = int(self.cell_size * 6)
+        self.hud_width = int(self.cell_size * 10)
         self.window_width = self.game_width + self.hud_width
         self.window_height = self.ROWS * self.cell_size
 
@@ -75,6 +75,11 @@ class Game:
         self.player.game = self
         self.player.set_message_callback(self.add_message)
         self.running = True
+        # HUD layout helpers
+        self.hud_y_after_inventory = 0
+        self.hud_y_after_room_menu = 0
+        # HUD layout helper: records the Y after inventory/permanents
+        self.hud_y_after_inventory = 0
         
         # === Tracking für gefundene Permanents (verhindert Respawn) ===
         self.found_permanents = set()
@@ -368,7 +373,6 @@ class Game:
         if getattr(self.manor, "bonus_on_draft_bedroom", False):
             if chosen.name in ("Bedroom", "BunkRoom", "GuestBedroom"):
                 self.player.gagner_pas(5)
-                # removed debug: Nursery draft bedroom bonus
 
 
     # choix de objet a echanger contre de l'or dans les pieces jaunes
@@ -500,6 +504,8 @@ class Game:
     # ====================== AFFICHAGE ======================
     def render(self):
         self.screen.fill(self.COLOR_BG, (0, 0, self.game_width, self.window_height))
+        # reset dynamic layout markers each frame
+        self.hud_y_after_room_menu = 0
 
         # --- 1. Dessiner le manoir ---
         self.draw_manor()
@@ -526,12 +532,12 @@ class Game:
         # --- 5. Inventaire ---
         self.draw_inventory(self.player, hud_rect)
 
-        # --- 6. Messages ---
-        self.draw_messages(hud_rect)
-
-        # --- 7. Menu de choix de pièces ---
+        # --- 6. Menu de choix de pièces ---
         if self.menu_active:
             self.draw_room_choice_menu(hud_rect)
+
+        # --- 7. Messages ---
+        self.draw_messages(hud_rect)
 
         # --- 8. Objets dans la pièce actuelle (toujours si pas menu de tirage et pas salle shop) ---
         if not self.menu_active and not self.is_in_shop_room():
@@ -615,23 +621,29 @@ class Game:
                          (margin_x, y + 10),
                          (margin_x + 200, y + 10), 1)
         y += 30
-        # Permanent objects section
-        perm_title = self.font_small.render("Objets permanents:", True, color)
+        # Permanent objects section (use same font family/size as consumables values)
+        perm_title = self.font_title.render("Objets permanents:", True, color)
         self.screen.blit(perm_title, (margin_x, y))
-        y += 26
+        y += 40
         if self.player.inventory.permanents:
             for obj in self.player.inventory.permanents:
-                line = self.font_small.render(f"- {obj.nom}", True, color)
+                line = self.font_text.render(f"- {obj.nom}", True, color)
                 self.screen.blit(line, (margin_x + 8, y))
-                y += 22
+                y += 26
         else:
-            none_line = self.font_small.render("(aucun)", True, color)
+            none_line = self.font_text.render("(aucun)", True, color)
             self.screen.blit(none_line, (margin_x + 8, y))
-            y += 22
+            y += 26
+        # Record end Y to position other HUD panes below
+        self.hud_y_after_inventory = y
 
     def draw_room_choice_menu(self, hud_rect):
         color = self.COLOR_TEXT
-        base_y = hud_rect.top + 400
+        # Place below inventory/permanents if needed, with bounds clamp
+        default_base_y = hud_rect.top + 400
+        dyn_start = getattr(self, 'hud_y_after_inventory', default_base_y) + 30
+        base_y = max(default_base_y, dyn_start)
+        base_y = min(base_y, self.window_height - 260)
         base_x = hud_rect.left + 50
 
         title = self.font_text.render("Choose a room to draft", True, color)
@@ -673,6 +685,10 @@ class Game:
         
         reroll_surf = self.font_small.render(reroll_text, True, reroll_color)
         self.screen.blit(reroll_surf, (base_x, reroll_y))
+        # record bottom of room menu to avoid overlap with messages
+        bottom = reroll_y + reroll_surf.get_height()
+        if bottom > getattr(self, 'hud_y_after_room_menu', 0):
+            self.hud_y_after_room_menu = bottom
 
     def add_message(self, text: str):
         self.messages.append(text)
@@ -681,7 +697,12 @@ class Game:
 
     def draw_messages(self, hud_rect):
         x = hud_rect.left + 40
-        y = hud_rect.top + 600
+        # Place messages below inventory/permanents if needed, with bounds clamp
+        default_y = hud_rect.top + 600
+        dyn_inv = getattr(self, 'hud_y_after_inventory', default_y) + 40
+        dyn_menu = getattr(self, 'hud_y_after_room_menu', 0) + 20
+        y = max(default_y, dyn_inv, dyn_menu)
+        y = min(y, self.window_height - 120)
         title = self.font_text.render("Messages:", True, self.COLOR_TEXT)
         self.screen.blit(title, (x, y))
         y += 30
@@ -696,12 +717,12 @@ class Game:
         # afficher seulement dans une pièce jaune
         if not self.is_in_shop_room():
             return
-        x = hud_rect.left + 280
+        x = hud_rect.left + 500
         y = hud_rect.top + 40
 
         title = self.font_title.render("Magasin :", True, self.COLOR_TEXT)
         self.screen.blit(title, (x, y))
-        y += 40
+        y += 50
 
         # initialiser items si nécessaire (sans activation)
         if not hasattr(self, 'shop_items') or not self.shop_items:
@@ -729,7 +750,7 @@ class Game:
 
     def draw_room_objects(self, hud_rect):
         """Shows the objects in the current Room"""
-        x = hud_rect.left + 280
+        x = hud_rect.left + 500
         y = hud_rect.top + 40
 
         px, py = self.player.position
@@ -737,9 +758,9 @@ class Game:
 
         if not room or not room.objets:
             return
-        title = self.font_title.render("Objets:", True, self.COLOR_TEXT)
+        title = self.font_title.render("Objets à ramasser:", True, self.COLOR_TEXT)
         self.screen.blit(title, (x, y))
-        y += 40
+        y += 50
 
         if not self.pickup_menu_active:
             for i, obj in enumerate(room.objets, start=1):

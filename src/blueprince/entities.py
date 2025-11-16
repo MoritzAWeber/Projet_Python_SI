@@ -16,10 +16,10 @@ class Player:
         self.position = [2, 8]  # Starting position
         
         self.pas = 70       # Le joueur commence avec 70 pas    
-        self.or_ = 50          
+        self.or_ = 0         
         self.gemmes = 2         # Commence avec 2
-        self.cles = 10           # Commence avec 0 
-        self.des = 3          # Commence avec 0 
+        self.cles = 0          # Commence avec 0 
+        self.des = 0        # Commence avec 0 
 
         self.manor = manor
         

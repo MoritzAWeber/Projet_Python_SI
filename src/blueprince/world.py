@@ -3,7 +3,8 @@ import random
 from abc import ABC, abstractmethod
 
 from .entities import (
-    Pomme, Banane, Or, Gemmes, Cles, Des, Pelle, Marteau, EndroitCreuser, DetecteurMetaux, PatteLapin, Coffre, Casier
+    Pomme, Banane, Or, Gemmes, Cles, Des, Pelle, Marteau, EndroitCreuser,
+    DetecteurMetaux, PatteLapin, Coffre, Casier, KitCrochetage, Gateau, Sandwich, Repas
 )
 
 
@@ -82,6 +83,7 @@ class ShopEffect:
         if hasattr(player, "game"):
             try:
                 player.game.open_shop_menu(self)  # prépare les items sans activation
+                player.add_message("Magasin disponible: appuyez sur M pour ouvrir.")
             except Exception:
                 pass
 
@@ -234,7 +236,7 @@ class Greenhouse(Room):
         if not hasattr(manor, "green_draw_bonus"):
             manor.green_draw_bonus = 0
         manor.green_draw_bonus += 1
-        
+        player.add_message("Greenhouse: bonus de tirage vert +1")
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
 
@@ -261,6 +263,7 @@ class MorningRoom(Room):
         self.generate_loot_on_enter(player)
         
         player.gemmes += 2
+        player.add_message("Morning Room: +2 gemmes")
         self.effect_triggered = True 
 
 
@@ -297,6 +300,7 @@ class SecretGarden(Room):
             for _ in range(manor.WIDTH * manor.HEIGHT):
                 if random.random() < 0.20:
                     target_conf.objets.append(random.choice(fruits))
+            player.add_message("Secret Garden: fruits envoyés vers la Conference Room")
         else:
             for y in range(manor.HEIGHT):
                 for x in range(manor.WIDTH):
@@ -304,6 +308,7 @@ class SecretGarden(Room):
                     if room and room is not self:
                         if random.random() < 0.20:
                             room.objets.append(random.choice(fruits))
+            player.add_message("Secret Garden: des fruits se répandent dans le manoir")
         
         self.effect_triggered = True 
 
@@ -335,6 +340,7 @@ class Veranda(Room):
         if manor is None:
             return
         manor.green_item_bonus = True
+        player.add_message("Veranda: bonus d'objets verts activé")
         self.effect_triggered = True 
 
 
@@ -394,6 +400,7 @@ class Patio(Room):
                 room = manor.get_room(x, y)
                 if room and getattr(room, "color", "") == "green":
                     room.objets.append(Gemmes(1))
+        player.add_message("Patio: +1 gemme ajoutée à chaque pièce verte")
         
         self.effect_triggered = True # <-- CORRECTION
 
@@ -424,6 +431,7 @@ class Terrace(Room):
         if manor is None:
             return
         manor.green_rooms_free = True
+        player.add_message("Terrace: les pièces vertes deviennent gratuites")
         self.effect_triggered = True 
 
 
@@ -453,6 +461,7 @@ class HerLadyshipsChamber(Room):
         manor = player.manor
         manor.bonus_next_boudoir_steps = 10
         manor.bonus_next_walkin_gems = 3
+        player.add_message("Her Ladyship’s Chamber: prochains bonus activés")
         self.effect_triggered = True 
 
 
@@ -479,6 +488,7 @@ class MasterBedroom(Room):
         manor = player.manor
         count = sum(1 for y in range(manor.HEIGHT) for x in range(manor.WIDTH) if manor.get_room(x, y))
         player.gagner_pas(count)
+        player.add_message(f"Master Bedroom: +{count} pas (pièces posées)")
 
 
 class Nursery(Room):
@@ -504,6 +514,7 @@ class Nursery(Room):
         self.generate_loot_on_enter(player)
         
         player.manor.bonus_on_draft_bedroom = True
+        player.add_message("Nursery: les prochains tirages de Bedroom donnent +5 pas")
         self.effect_triggered = True 
 
 
@@ -539,6 +550,7 @@ class ServantsQuarters(Room):
                     count += 2  
 
         player.cles += count
+        player.add_message(f"Servants’ Quarters: +{count} clé(s)")
 
 
 class Bedroom(Room):
@@ -561,6 +573,7 @@ class Bedroom(Room):
         self.generate_loot_on_enter(player)
         
         player.gagner_pas(2)
+        # gagner_pas affiche déjà un message
 
 
 class Boudoir(Room):
@@ -587,6 +600,7 @@ class Boudoir(Room):
             bonus = manor.bonus_next_boudoir_steps
             player.gagner_pas(bonus)
             manor.bonus_next_boudoir_steps = 0
+            player.add_message(f"Boudoir: bonus spécial de +{bonus} pas consommé")
 
 
 class BunkRoom(Room):
@@ -624,6 +638,7 @@ class GuestBedroom(Room):
         self.generate_loot_on_enter(player)
         
         player.gagner_pas(10)
+        # gagner_pas affiche déjà un message
         self.effect_triggered = True 
 
 
@@ -649,7 +664,7 @@ class EastWingHall(Room):
             name="EastWingHall",
             image=pygame.image.load("assets/rooms/Orange/East_Wing_Hall.png"),
             doors=["left", "right", "down"],
-            item_pool=[Or(3), Cles(1), EndroitCreuser(), Pelle(), Coffre()],
+            item_pool=[Or(3), Cles(1), EndroitCreuser(), Pelle(), Coffre(), Gateau()],
             rarity=1,
             placement_condition="any",
             color="orange"
@@ -661,7 +676,7 @@ class WestWingHall(Room):
             name="WestWingHall",
             image=pygame.image.load("assets/rooms/Orange/West_Wing_Hall.png"),
             doors=["left", "right", "down"],
-            item_pool=[Or(4), Cles(2), EndroitCreuser(), EndroitCreuser(), Pelle(), Coffre()],
+            item_pool=[Or(4), Cles(2), EndroitCreuser(), EndroitCreuser(), Pelle(), Coffre(), Repas()],
             rarity=1,
             placement_condition="any",
             color="orange"
@@ -673,7 +688,7 @@ class Hallway(Room):
             name="Hallway",
             image=pygame.image.load("assets/rooms/Orange/Hallway.png"),
             doors=["left", "right", "down"],
-            item_pool=[Or(2), Cles(2), Des(1), Coffre()],
+            item_pool=[Or(2), Cles(2), Des(1), Coffre(), Sandwich()],
             rarity=0,
             placement_condition="any",
             color="orange"
@@ -685,7 +700,7 @@ class Passageway(Room):
             name="Passageway",
             image=pygame.image.load("assets/rooms/Orange/Passageway.png"),
             doors=["left", "right", "up", "down"],
-            item_pool=[Or(2), Cles(1), Coffre()],
+            item_pool=[Or(2), Cles(1), Coffre(), KitCrochetage()],
             rarity=0,
             placement_condition="any",
             color="orange"
@@ -697,7 +712,7 @@ class GreatHall(Room):
             name="GreatHall",
             image=pygame.image.load("assets/rooms/Orange/Great_Hall.png"),
             doors=["left", "right", "up", "down"],
-            item_pool=[Or(5), Gemmes(2), Cles(2)],
+            item_pool=[Or(5), Gemmes(2), Cles(2), Repas()],
             rarity=2,
             placement_condition="any",
             color="orange"
@@ -727,6 +742,7 @@ class Foyer(Room):
         self.generate_loot_on_enter(player)
         
         player.manor.hallway_doors_unlocked = True
+        player.add_message("Foyer: portes de Hallway déverrouillées")
         self.effect_triggered = True 
 
 
@@ -753,6 +769,7 @@ class SecretPassage(Room):
         self.generate_loot_on_enter(player)
         
         player.manor.next_room_color_choice = True
+        player.add_message("Secret Passage: choix de la couleur au prochain tirage")
         self.effect_triggered = True 
 
 
@@ -769,7 +786,7 @@ class LockerRoom(Room):
             name="LockerRoom",
             image=pygame.image.load("assets/rooms/Blue/Locker_Room.png"),
             doors=["up", "down"],
-            item_pool=[Or(3), Gemmes(2), Cles(4), Casier()],
+            item_pool=[Or(3), Gemmes(2), Cles(4), Casier(), KitCrochetage()],
             rarity=1,
             placement_condition="any",
             color="blue"
@@ -792,6 +809,7 @@ class LockerRoom(Room):
             for _ in range(manor.WIDTH * manor.HEIGHT):
                 if random.random() < 0.20:
                     target_conf.objets.append(Cles(1))
+            player.add_message("Locker Room: clés envoyées vers la Conference Room")
         else:
             for y in range(manor.HEIGHT):
                 for x in range(manor.WIDTH):
@@ -799,6 +817,7 @@ class LockerRoom(Room):
                     if room and room is not self:
                         if random.random() < 0.20:
                             room.objets.append(Cles(1))
+            player.add_message("Locker Room: des clés apparaissent dans plusieurs pièces")
                             
         self.effect_triggered = True 
 
@@ -827,6 +846,7 @@ class Vault(Room):
         self.generate_loot_on_enter(player)
         
         player.or_ += 40
+        player.add_message("Vault: +40 or")
         self.effect_triggered = True 
 
 
@@ -839,7 +859,7 @@ class Workshop(Room):
             name="Workshop",
             image=pygame.image.load("assets/rooms/Blue/Workshop.png"),
             doors=["up", "down"],
-            item_pool=[Pelle(), Marteau(), DetecteurMetaux(), PatteLapin(), Casier()],
+            item_pool=[Pelle(), Marteau(), DetecteurMetaux(), PatteLapin(), KitCrochetage(), Casier()],
             rarity=2,
             placement_condition="center",
             color="blue"
@@ -855,6 +875,7 @@ class Workshop(Room):
         permanents = [Pelle(), Marteau(), DetecteurMetaux(), PatteLapin()]
         item = random.choice(permanents)
         player.inventory.add_item(item)
+        player.add_message(f"Workshop: objet permanent obtenu ({item.nom})")
         self.effect_triggered = True 
 
 
@@ -867,7 +888,7 @@ class BoilerRoom(Room):
             name="BoilerRoom",
             image=pygame.image.load("assets/rooms/Blue/Boiler_Room.png"),
             doors=["left", "down", "right"],
-            item_pool=[EndroitCreuser(), DetecteurMetaux(), Or(3), Pelle()],
+            item_pool=[EndroitCreuser(), DetecteurMetaux(), Or(3), Pelle(), KitCrochetage()],
             rarity=2,
             placement_condition="center",
             color="blue"
@@ -878,6 +899,7 @@ class BoilerRoom(Room):
         self.generate_loot_on_enter(player)
         
         player.gagner_pas(3)
+        # gagner_pas affiche déjà un message
 
 
 class ConferenceRoom(Room):
@@ -889,7 +911,7 @@ class ConferenceRoom(Room):
             name="ConferenceRoom",
             image=pygame.image.load("assets/rooms/Blue/Conference_Room.png"),
             doors=["down", "left", "right"],
-            item_pool=[Or(4), Gemmes(1), Cles(1), DetecteurMetaux(), Pelle()],
+            item_pool=[Or(4), Gemmes(1), Cles(1), DetecteurMetaux(), Pelle(), KitCrochetage()],
             rarity=2,
             placement_condition="center",
             color="blue"
@@ -904,6 +926,7 @@ class ConferenceRoom(Room):
         
         manor = player.manor
         manor.redirect_spread_to_conference = self
+        player.add_message("Conference Room: les futurs effets de dispersion convergeront ici")
         self.effect_triggered = True 
 
 
@@ -930,6 +953,7 @@ class Gallery(Room):
         self.generate_loot_on_enter(player)
         
         player.gemmes += 1
+        player.add_message("Gallery: +1 gemme")
         self.effect_triggered = True 
 
 
@@ -942,7 +966,7 @@ class Garage(Room):
             name="Garage",
             image=pygame.image.load("assets/rooms/Blue/Garage.png"),
             doors=["down"],
-            item_pool=[Or(2)],
+            item_pool=[Or(2), KitCrochetage()],
             rarity=1,
             placement_condition="any",
             color="blue"
@@ -956,7 +980,7 @@ class Garage(Room):
         self.generate_loot_on_enter(player)
         
         player.cles += 3
-        # removed debug: Garage +3 keys
+        player.add_message("Garage: +3 clés")
         self.effect_triggered = True 
 
 
@@ -981,6 +1005,7 @@ class Library(Room):
         
         manor = player.manor
         manor.rarity_bias += 1
+        player.add_message("Library: biais de rareté augmenté")
 
 
 class RumpusRoom(Room):
@@ -992,7 +1017,7 @@ class RumpusRoom(Room):
             name="RumpusRoom",
             image=pygame.image.load("assets/rooms/Blue/Rumpus_Room.png"),
             doors=["up", "down"],
-            item_pool=[Or(8), Banane(), Des(2), Cles(2), Gemmes(1)],
+            item_pool=[Or(8), Banane(), Des(2), Cles(2), Gemmes(1), Sandwich()],
             rarity=1,
             placement_condition="any",
             color="blue"
@@ -1006,6 +1031,7 @@ class RumpusRoom(Room):
         self.generate_loot_on_enter(player)
         
         player.or_ += 8
+        player.add_message("Rumpus Room: +8 or")
         self.effect_triggered = True 
 
 
@@ -1018,7 +1044,7 @@ class Pantry(Room):
             name="Pantry",
             image=pygame.image.load("assets/rooms/Blue/Pantry.png"),
             doors=["left", "down"],
-            item_pool=[Or(4), Pomme(), Banane()],
+            item_pool=[Or(4), Pomme(), Banane(), Gateau(), Sandwich()],
             rarity=0,
             placement_condition="any",
             color="blue"
@@ -1032,6 +1058,7 @@ class Pantry(Room):
         self.generate_loot_on_enter(player)
         
         player.or_ += 4
+        player.add_message("Pantry: +4 or")
         self.effect_triggered = True 
 
 
@@ -1058,6 +1085,7 @@ class Room8(Room):
         self.generate_loot_on_enter(player)
         
         player.gemmes += 1
+        player.add_message("Room 8: +1 gemme")
         self.effect_triggered = True 
 
 
@@ -1087,7 +1115,7 @@ class Rotunda(Room):
         for d in self.doors:
             new_doors.append(mapping.get(d, d))
         self.doors = new_doors
-        # removed debug: Rotunda doors rotated
+        player.add_message("Rotunda: les portes ont tourné")
         
 
 
@@ -1124,7 +1152,7 @@ class Kitchen(ShopEffect, Room):
         super().__init__(
             name="Kitchen",
             image=pygame.image.load("assets/rooms/Yellow/Kitchen.png"),
-            doors=["down"],
+            doors=["down", "left"],
             rarity=0,
             placement_condition="any",
             color="yellow"
