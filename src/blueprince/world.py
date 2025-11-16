@@ -98,8 +98,7 @@ class EntranceHall(Room):
             doors=["up", "left", "right"],
             placement_condition="bottom",
             color="blue",
-            # Start room now provides a shovel so the player can dig here immediately
-            objets=[Pelle(), EndroitCreuser()]
+            objets=[]
         )
 
 
@@ -216,6 +215,7 @@ class Veranda(Room):
             name="Veranda",
             image=pygame.image.load("assets/rooms/Green/Veranda.png"),
             doors=["up", "down"],
+            gem_cost=2,
             rarity=1,
             placement_condition="edge",
             color="green"
@@ -238,6 +238,7 @@ class Cloister(Room):
             name="Cloister",
             image=pygame.image.load("assets/rooms/Green/Cloister.png"),
             doors=["left", "right", "up", "down"],
+            gem_cost=3,
             rarity=1,
             placement_condition="center",
             color="green"
@@ -360,6 +361,7 @@ class MasterBedroom(Room):
             name="MasterBedroom",
             image=pygame.image.load("assets/rooms/Purple/Master_Bedroom.png"),
             doors=["down"],
+            gem_cost=2,
             rarity=2,
             placement_condition="any",
             color="purple"
@@ -615,6 +617,7 @@ class Foyer(Room):
             name="Foyer",
             image=pygame.image.load("assets/rooms/Orange/Foyer.png"),
             doors=["up", "down"],
+            gem_cost=2,
             rarity=2,
             placement_condition="any",
             color="orange"
@@ -701,6 +704,7 @@ class Vault(Room):
             name="Vault",
             image=pygame.image.load("assets/rooms/Blue/Vault.png"),
             doors=["down"],  # cul-de-sac
+            gem_cost=3,
             rarity=3,
             placement_condition="edge",
             color="blue"
@@ -909,6 +913,7 @@ class Rotunda(Room):
             name="Rotunda",
             image=pygame.image.load("assets/rooms/Blue/Rotunda.png"),
             doors=["down", "left"],
+            gem_cost=3,
             rarity=2,
             placement_condition="center",
             color="blue"

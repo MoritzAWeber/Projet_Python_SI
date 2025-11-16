@@ -64,8 +64,7 @@ class Game:
         # === Monde et joueur ===
         self.clock = pygame.time.Clock()
         self.manor = Manor()
-        self.player = Player("Player")
-        self.player.manor = self.manor
+        self.player = Player("Player", self.manor)
         self.player.set_message_callback(self.add_message)
         self.running = True
 
@@ -192,7 +191,7 @@ class Game:
         if ny in [8, 7, 6]:
             lock_level = 0
         elif ny in [5, 4]:
-            lock_level = 1
+            lock_level = random.choice([0, 1])
         elif ny in [3, 2]:
             lock_level = random.choice([1, 2])
         elif ny in [1, 0]:
@@ -297,6 +296,13 @@ class Game:
     def confirm_room_choice(self):
         """Valide le choix de la pièce et la place dans le manoir."""
         chosen = self.menu_choices[self.menu_index]
+        cost = getattr(chosen, 'gem_cost', 0)
+        if cost > 0:
+            if self.player.gemmes < cost:
+                self.add_message(f"Pas assez de gemmes (coût: {cost}).")
+                return
+            self.player.gemmes -= cost
+            self.add_message(f"- {cost} gemme(s)")
         
         x, y = self.player.position
         dx, dy = self.manor.get_direction_offset(self.selected_door)
@@ -369,7 +375,7 @@ class Game:
     def restart_game(self):
         # Reinitialize dynamic game state (keep window & pygame)
         self.manor = Manor()
-        self.player = Player("Raouf")
+        self.player = Player("Player", self.manor)
         self.player.set_message_callback(self.add_message)
         self.selected_door = "up"
         self.menu_active = False
@@ -541,6 +547,14 @@ class Game:
 
             name = self.font_small.render(room.name, True, color)
             self.screen.blit(name, (x + 10, y_img + card_size + 10))
+
+            # Afficher le coût en gemmes
+            cost = getattr(room, 'gem_cost', 0)
+            cost_text = "Gratuit" if cost == 0 else f"Coût: {cost} gemme(s)"
+            affordable = self.player.gemmes >= cost
+            cost_color = (120, 180, 120) if cost == 0 else ((180, 60, 60) if not affordable else color)
+            cost_surf = self.font_small.render(cost_text, True, cost_color)
+            self.screen.blit(cost_surf, (x + 10, y_img + card_size + 28))
         
         # Reroll-Anzeige
         reroll_y = y_img + card_size + 50
@@ -581,7 +595,6 @@ class Game:
 
         if not room or not room.objets:
             return
-
         title = self.font_title.render("Objets:", True, self.COLOR_TEXT)
         self.screen.blit(title, (x, y))
         y += 40

@@ -10,7 +10,7 @@ class Player:
                           "right": "left",
                           "left": "right"}
 
-    def __init__(self, name):
+    def __init__(self, name, manor):
         self.name = name
         self.inventory = Inventory()
         self.position = [2, 8]  # Starting position
@@ -20,6 +20,8 @@ class Player:
         self.gemmes = 2         # Commence avec 2
         self.cles = 10           # Commence avec 0 
         self.des = 0            # Commence avec 0 
+
+        self.manor = manor
         
         self.is_alive = True    # Utile pour la boucle de jeu principale
         
@@ -424,6 +426,16 @@ class Coffre(AutreObjet):
         ]
         reward = random.choice(rewards)
         reward.pick_up(player)
+        # Luck system: chance for extra distinct reward (Patte de lapin / Veranda indirectly via manor)
+        manor = getattr(player, 'manor', None)
+        luck_mult = manor.get_luck_multiplier(player) if manor and hasattr(manor, 'get_luck_multiplier') else 1.0
+        extra_chance = 0.25 * luck_mult  # base 25%, scaled by luck
+        if random.random() < extra_chance:
+            remaining = [r for r in rewards if r is not reward]
+            if remaining:
+                extra = random.choice(remaining)
+                extra.pick_up(player)
+                player.add_message(f"Chance supplémentaire : {extra.nom} obtenu !")
 
 
     def should_consume_on_pickup(self):
@@ -453,16 +465,21 @@ class EndroitCreuser(AutreObjet):
             if player.inventory.has_permanent("Détecteur de métaux"):
                 chance += 0.2  # +20% better luck
                 player.add_message("Le détecteur de métaux augmente vos chances!")
+            # Global luck multiplier (Patte de lapin + Veranda)
+            manor = getattr(player, 'manor', None)
+            if manor and hasattr(manor, 'get_luck_multiplier'):
+                luck_mult = manor.get_luck_multiplier(player)
+                chance += (luck_mult - 1.0) * 0.25  # translate multiplicative luck into additive chance bump
             
             if chance < 0.3:
                 player.add_message("Vous ne trouvez rien...")
             elif chance < 0.6:
-                # Small reward
-                reward = random.choice([Or(2), Pas(5)])
+                # Small reward (less metal objects)
+                reward = random.choice([Gemmes(2), Or(2), Pas(5)])
                 reward.pick_up(player)
                 player.add_message(f"Vous avez trouvé: {reward.nom}!")
             else:
-                # Big reward
+                # Big reward (more metal objects)
                 reward = random.choice([Gemmes(2), Cles(1), Or(5)])
                 reward.pick_up(player)
                 player.add_message(f"Vous avez trouvé: {reward.nom}!")
@@ -521,10 +538,21 @@ class Casier(AutreObjet):
             Gemmes(random.randint(1, 2)),
             Pas(random.randint(5, 15))
         ]
-        reward = random.sample(rewards, random.randint(1, 3))
+        base_count = random.randint(1, 3)
+        manor = getattr(player, 'manor', None)
+        luck_mult = manor.get_luck_multiplier(player) if manor and hasattr(manor, 'get_luck_multiplier') else 1.0
+        # Luck: small chance to add one more item if not already max
+        if base_count < 3 and random.random() < 0.30 * luck_mult:
+            base_count += 1
+        reward = random.sample(rewards, base_count)
         for item in reward:
             item.pick_up(player)
             player.add_message(f"Vous avez trouvé: {item.nom} dans le casier!")
+        # Additional low probability metallic bonus
+        if random.random() < 0.20 * (luck_mult - 1.0 + 1):
+            bonus = random.choice([Cles(1), Or(random.randint(1,3))])
+            bonus.pick_up(player)
+            player.add_message(f"Bonus de chance : {bonus.nom} supplémentaire!")
 
     def should_consume_on_pickup(self):
         """Détermine si l'objet doit être consommé immédiatement après la collecte."""
