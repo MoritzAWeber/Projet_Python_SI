@@ -339,7 +339,7 @@ class Game:
         
         chosen.pick_up(self.player)
 
-        if chosen.should_consume_on_pickup():
+        if chosen in room.objets:
             room.objets.remove(chosen)
         if not room.objets:
             self.pickup_menu_active = False
