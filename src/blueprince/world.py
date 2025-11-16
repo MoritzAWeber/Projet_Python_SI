@@ -26,31 +26,39 @@ class Room(ABC):
         return direction in self.doors
 
     def create_rotated_copy(self, num_rotations):
-        """Creates a copy of this room rotated by num_rotations * 90 degrees."""
+        """Effect:
+        Creates a rotated logical copy preserving the subclass. Performs a
+        clockwise rotation num_rotations * 90° of doors and image. Returns self
+        unchanged if num_rotations == 0. Each rotated copy gets its own objets
+        list (shallow copy) and rotation angle.
+
+        Parameters:
+        - num_rotations (int): Number of clockwise quarter turns (0–3).
+
+        Returns:
+        - Room: New instance of the same subclass with rotated doors/image.
+        """
         if num_rotations == 0:
-            return self  # No rotation needed, return self
-        
-        # Manually create a new room instance with rotated attributes
+            return self
         rotated_doors = self.original_doors.copy()
-        
-        # Apply rotation num_rotations times
         for _ in range(num_rotations):
             rotation_map = {"up": "right", "right": "down", "down": "left", "left": "up"}
             rotated_doors = [rotation_map[d] for d in rotated_doors]
-        
-        # Create new room with rotated properties
-        rotated = Room(
-            name=self.name,
-            image=pygame.transform.rotate(self.image, -90 * num_rotations) if self.image else None,
-            doors=rotated_doors,
-            gem_cost=self.gem_cost,
-            objets=self.objets.copy(),
-            rarity=self.rarity,
-            placement_condition=self.placement_condition
-        )
-        rotated.rotation = (num_rotations * 90) % 360
+
+        rotated_image = pygame.transform.rotate(self.image, -90 * num_rotations) if self.image else None
+
+        # Instantiate without calling subclass __init__ to be able to set fields manually
+        rotated = self.__class__.__new__(self.__class__)
+        # Copy scalar & mutable attributes
+        rotated.name = self.name
+        rotated.image = rotated_image
+        rotated.doors = rotated_doors
         rotated.original_doors = self.original_doors.copy()
-        
+        rotated.gem_cost = self.gem_cost
+        rotated.objets = self.objets.copy()
+        rotated.rarity = self.rarity
+        rotated.placement_condition = self.placement_condition
+        rotated.rotation = (num_rotations * 90) % 360
         return rotated
     
     def get_all_rotations(self):
@@ -348,63 +356,40 @@ class Manor:
         return None
 
     def place_room(self, x, y, room):
+        """Effect:
+        Places a room instance at grid coordinate (x, y) after bounds
+        validation, then removes the original (unrotated) room definition
+        from the `room_catalog`.
+
+        Parameters:
+        - x (int): Column index in manor grid.
+        - y (int): Row index in manor grid.
+        room (Room): The room instance (may be a rotated copy) to store.
+        """
         if not self.in_bounds(x, y):
             raise ValueError("Position hors limites.")
         self.grid[y][x] = room
-        
-        # Remove the original room from room_catalog (not rotated copies)
-        # Find the original room by name in the catalog
-        for catalog_room in self.room_catalog[:]:  # Use slice to iterate over copy
+
+        # Remove original catalog entry (by name) to prevent future draws.
+        for catalog_room in self.room_catalog[:]:
             if catalog_room.name == room.name:
                 self.room_catalog.remove(catalog_room)
                 break
 
     def draw_three_rooms(self, current_pos, direction, room_catalog):
+        """Effect:
+        Builds up to three choices of possible rooms and enforces the
+        at-least-one-free rule if any free options exist.
+
+        Parameters:
+        - current_pos (tuple[int,int]): Origin (x,y).
+        - direction (str): Move direction ('up','down','left','right').
+        - room_catalog (list[Room]): Remaining unplaced room prototypes.
+
+        Returns:
+        - list[Room]: Up to three room instances from the filtered possibilities.
         """
-        Tire 3 pièces compatibles selon la position du joueur et la direction choisie.
-        - Respecte les portes compatibles (avec rotation)
-        - Évite les murs du manoir
-        - Pas de doublons dans le tirage
-        - Garantit une pièce gratuite
-        """
-        x, y = current_pos
-        dx, dy = self.get_direction_offset(direction)
-        nx, ny = x + dx, y + dy
-        
-        # Get all possible room rotations that match the required door
-        required_door = self.opposite_direction[direction]
-        possible_rooms = []
-        
-        for room in room_catalog:
-            # Try all rotations of each room
-            for rotated_room in room.get_all_rotations():
-                if required_door in rotated_room.doors:
-                    # Check placement condition on TARGET position (nx, ny)
-                    cond = rotated_room.placement_condition
-                    
-                    if cond == "edge" and not (nx in (0, self.WIDTH - 1) or ny in (0, self.HEIGHT - 1)):
-                        continue
-                    if cond == "center" and (nx in (0, self.WIDTH - 1) or ny in (0, self.HEIGHT - 1)):
-                        continue
-                    if cond == "top" and ny != 0:
-                        continue
-                    if cond == "bottom" and ny != self.HEIGHT - 1:
-                        continue
-                    
-                    # Check that no doors point outside the manor bounds
-                    valid_doors = True
-                    for door in rotated_room.doors:
-                        door_dx, door_dy = self.get_direction_offset(door)
-                        check_x, check_y = nx + door_dx, ny + door_dy
-                        if not self.in_bounds(check_x, check_y):
-                            valid_doors = False
-                            break
-                    
-                    if not valid_doors:
-                        continue
-                    
-                    possible_rooms.append(rotated_room)
-                    break  # Only add one rotation per room to avoid duplicates
+        possible_rooms = self.get_possible_rooms(current_pos, direction, room_catalog)
 
         # If no compatible rooms, return empty (should not happen normally)
         if not possible_rooms:
@@ -440,19 +425,72 @@ class Manor:
         return (0, 0)
     
     def get_possible_rooms(self, position, direction, room_catalog):
-        """Returns rooms that can be placed in given direction."""
+        """Effect:
+        Returns all room instances (including a single valid rotation per base
+        room) that can be legally placed adjacent to `position` in `direction`.
+
+        Parameters:
+        - position (tuple[int, int]): (x, y) origin cell.
+        - direction (str): Direction of movement ('up','down','left','right').
+        - room_catalog (list[Room]): Remaining unplaced rooms in the catalog.
+
+        Returns:
+        - list[Room]: Rotated room instances valid for placement; empty if none.
+        """
         x, y = position
         dx, dy = self.get_direction_offset(direction)
         nx, ny = x + dx, y + dy
-        
+
+        # Target must be in-bounds and empty
         if not self.in_bounds(nx, ny) or self.get_room(nx, ny):
             return []
-            
+
         required_door = self.opposite_direction[direction]
-        return [r for r in room_catalog if required_door in getattr(r, "doors", [])]
+        possible_rooms = []
+
+        for room in room_catalog:
+            for rotated_room in room.get_all_rotations():
+                if required_door not in rotated_room.doors:
+                    continue
+
+                # Enforce placement condition on the TARGET (nx, ny)
+                cond = rotated_room.placement_condition
+                if cond == "edge" and not (nx in (0, self.WIDTH - 1) or ny in (0, self.HEIGHT - 1)):
+                    continue
+                if cond == "center" and (nx in (0, self.WIDTH - 1) or ny in (0, self.HEIGHT - 1)):
+                    continue
+                if cond == "top" and ny != 0:
+                    continue
+                if cond == "bottom" and ny != self.HEIGHT - 1:
+                    continue
+
+                # Reject rotations whose doors would lead outside the manor
+                valid_doors = True
+                for door in rotated_room.doors:
+                    door_dx, door_dy = self.get_direction_offset(door)
+                    check_x, check_y = nx + door_dx, ny + door_dy
+                    if not self.in_bounds(check_x, check_y):
+                        valid_doors = False
+                        break
+                if not valid_doors:
+                    continue
+
+                possible_rooms.append(rotated_room)
+                break  # Only keep the first valid rotation per room
+
+        return possible_rooms
     
     def can_advance(self):
-        """Checks if there are any possible moves left on the whole grid."""
+        """Effect:
+        Scans the entire manor grid to determine if at least one legal
+        move remains.
+
+        Parameters:
+        - None
+
+        Returns:
+        - bool: True if at least one expansion position exists; False otherwise.
+        """
         for y in range(self.HEIGHT):
             for x in range(self.WIDTH):
                 room = self.get_room(x, y)
