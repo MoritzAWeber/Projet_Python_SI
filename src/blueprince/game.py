@@ -109,12 +109,22 @@ class Game:
     
     
     def is_in_shop_room(self):
+        """Check if the player is currently in a shop room (yellow room).
+
+        Returns:
+        - bool: True if current room color is yellow, False otherwise.
+        """
         x, y = self.player.position
         room = self.manor.get_room(x, y)
         return getattr(room, "color", None) == "yellow"
 
     # ====================== BOUCLE PRINCIPALE ======================
     def run(self):
+        """Main game loop that handles events, updates game state, and renders.
+
+        Runs at 30 FPS and continues until self.running is set to False.
+        Checks end conditions only if game is not over.
+        """
         while self.running:
             self.handle_events()
             if not self.game_over:
@@ -125,6 +135,16 @@ class Game:
 
     # ====================== GESTION DES TOUCHES ======================
     def handle_events(self):
+        """Handle all keyboard and window events based on current game state.
+
+        Processes different input modes:
+        - Game over/victory: R to restart, ESC to quit
+        - Door confirmation: O to confirm, A to cancel
+        - Shop menu: UP/DOWN to navigate, SPACE to buy, M to close
+        - Pickup menu: UP/DOWN to navigate, SPACE to pick up, E to close
+        - Room draft menu: LEFT/RIGHT to navigate, SPACE to confirm, R to reroll
+        - Normal navigation: Z/Q/S/D or arrows to select door, SPACE to open, M for opening shop, E for opening object pickup
+        """
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
@@ -214,7 +234,7 @@ class Game:
                             if self.shop_menu_active:
                                 self.shop_menu_active = False
                             else:
-                                self.open_shop_menu(None)
+                                self.open_shop_menu()
                                 self.shop_menu_active = True
                         return
                     elif event.key == pygame.K_e:
@@ -227,6 +247,17 @@ class Game:
 
     # la gestion des niveau des portes + gestion de la demande des cles
     def open_door_menu(self):
+        """Handle door opening logic with lock levels and key requirements.
+
+        Lock levels depend on Y position:
+        - Y 8-6: Level 0 (free)
+        - Y 5-4: Level 0 or 1 (random)
+        - Y 3-2: Level 1 or 2 (random)
+        - Y 1-0: Level 2
+
+        If player has KitCrochetage, level 1 locks can be picked for free.
+        Shows confirmation dialog if keys are required, otherwise opens directly.
+        """
         
         if not self.player.can_move(self.selected_door, self.manor):
             self.add_message("Cette direction n'est pas accessible.")
@@ -255,7 +286,7 @@ class Game:
         # 3. Vérifier les outils (Kit de crochetage)
         has_lockpick = any(isinstance(obj, KitCrochetage) for obj in self.player.inventory.permanents)
 
-        required_keys = lock_level
+        required_keys = 0 if lock_level == 0 else 1
         pickaxe_msg = None
 
         if lock_level == 1 and has_lockpick:
@@ -289,6 +320,14 @@ class Game:
     
     #
     def _execute_door_opening(self):
+        """Execute the door opening after confirmation.
+
+        Uses stored details from confirm_door_details to:
+        - Deduct required keys from player inventory
+        - Display lockpicking message if applicable
+        - Draw 3 room choices and activate room draft menu
+        - Refund keys if no rooms are available (error case)
+        """
         # 1. Récupérer les détails stockés
         details = self.confirm_door_details
         required_keys = details['keys']
@@ -327,7 +366,13 @@ class Game:
         self.confirm_door_details = {}
     
     def reroll_room_choices(self):
-        """Benutzt einen Würfel um die 3 Raumoptionen neu zu würfeln."""
+        """Use a die to reroll the 3 current room options. Requires player to have at least 1 die
+
+        Effects:
+        - Consumes 1 die from player inventory
+        - Generates new room choices for current door direction
+        - Resets menu_index to 0
+        """
         if self.player.des <= 0:
             self.add_message("Vous n'avez pas de dés pour relancer!")
             return
@@ -349,7 +394,14 @@ class Game:
         self.menu_index = 0
 
     def confirm_room_choice(self):
-        """Valide le choix de la pièce et la place dans le manoir."""
+        """Validate room choice and place it in the manor. Uses self.menu_index to identify chosen room from menu_choices
+
+        Effects:
+        - Deducts gem cost from player if room has gem_cost > 0
+        - Places chosen room in manor at calculated position
+        - Applies Nursery bonus if active and room is a bedroom type
+        - Closes room draft menu
+        """
         chosen = self.menu_choices[self.menu_index]
         cost = getattr(chosen, 'gem_cost', 0)
         if cost > 0:
@@ -377,7 +429,14 @@ class Game:
 
     # choix de objet a echanger contre de l'or dans les pieces jaunes
     ####################################################################
-    def open_shop_menu(self, shop_room):
+    def open_shop_menu(self):
+        """Initialize shop menu with available items.
+
+        Effects:
+        - Sets up shop_items list with name, cost, and effect lambda
+        - Resets shop_index to 0
+        - Does not activate menu automatically
+        """
     # empêcher ouverture si un autre menu est actif
         if self.menu_active or self.pickup_menu_active or self.confirm_door_active:
             return
@@ -392,10 +451,16 @@ class Game:
         ]
 
         self.shop_index = 0
-        self.current_shop_room = shop_room  # ne pas activer automatiquement
 
 
     def confirm_shop_choice(self):
+            """Process shop purchase for currently selected item. Uses self.shop_index to identify selected item
+
+            Effects:
+            - Deducts gold from player if purchase successful
+            - Applies item effect (adds steps, keys, gems, or permanent item)
+            - Shows message about purchase or insufficient gold
+            """
             name, cost, effect = self.shop_items[self.shop_index]
 
             if self.player.or_ < cost:
@@ -407,6 +472,13 @@ class Game:
             self.add_message(f"Achat : {name} pour {cost} or.")
 
     def open_object_pickup_menu(self):
+        """Open pickup menu for objects in current room.
+
+        Effects:
+        - Sets pickup_choices to current room's objects list
+        - Activates pickup menu if objects are available
+        - Shows message if no objects present
+        """
         x, y = self.player.position
         room = self.manor.get_room(x, y)
         if not room or not room.objets:
@@ -418,7 +490,15 @@ class Game:
         self.pickup_menu_active = True
 
     def confirm_pickup_choice(self):
-        """Valide le choix de l'objet à ramasser."""
+        """Validate and process object pickup from current room.
+
+        Side effects:
+        - Calls object's pick_up method to add to player inventory
+        - Removes object from room (unless should_consume_on_pickup returns False)
+        - Tracks permanent objects globally to prevent respawning
+        - Updates pickup menu choices and index after removal
+        - Closes menu if no objects remain
+        """
         # Bounds check to prevent IndexError
         if not self.pickup_choices or self.pickup_index >= len(self.pickup_choices):
             self.pickup_menu_active = False
@@ -455,6 +535,15 @@ class Game:
             self.pickup_index = min(self.pickup_index, len(self.pickup_choices) - 1)
 
     def check_end_conditions(self):
+        """Check and trigger game over or victory conditions.
+
+        Loss conditions:
+        - Player runs out of steps (not is_alive)
+        - No more rooms can be placed (manor.can_advance returns False)
+
+        Victory condition:
+        - Player reaches the Antechamber room
+        """
         # 1) Lose: plus de pas
         if not self.player.is_alive:
             self.end_game("Vous n'avez plus de pas...\nGame Over.")
@@ -469,17 +558,45 @@ class Game:
             self.set_victory("Bravo ! Vous avez atteint l'Antechamber. Vous gagnez !")
 
     def end_game(self, message: str):
+        """Trigger game over state.
+
+        Parameters:
+        - message: str, text to display on game over screen
+
+        Side effects:
+        - Sets game_over flag to True
+        - Stores message for overlay display
+        - Adds "GAME OVER" to message log
+        """
         self.game_over = True
         self.game_over_message = message
         # Also push a concise last message into log
         self.add_message("GAME OVER")
 
     def set_victory(self, message: str):
+        """Trigger victory state.
+
+        Parameters:
+        - message: str, text to display on victory screen
+
+        Side effects:
+        - Sets victory flag to True
+        - Stores message for overlay display
+        - Adds "VICTOIRE !" to message log
+        """
         self.victory = True
         self.victory_message = message
         self.add_message("VICTOIRE !")
 
     def restart_game(self):
+        """Reinitialize game state for a new run.
+
+        Side effects:
+        - Creates new Manor and Player instances
+        - Resets all menu states and flags
+        - Clears message log and found permanents tracking
+        - Keeps window and pygame initialized
+        """
         # Reinitialize dynamic game state (keep window & pygame)
         self.manor = Manor()
         self.player = Player("Player", self.manor)
@@ -503,6 +620,22 @@ class Game:
 
     # ====================== AFFICHAGE ======================
     def render(self):
+        """Main rendering method called each frame.
+
+        Draws in order:
+        1. Manor grid with rooms and images
+        2. HUD background
+        3. White frame around current room
+        4. Door selector indicators
+        5. Player inventory (consumables + permanents)
+        6. Room choice menu (if active)
+        7. Message log
+        8. Room objects panel (if not in menu or shop)
+        9. Shop menu (passive display)
+        10. Victory/Game over overlays (if triggered)
+
+        Updates display with pygame.display.flip().
+        """
         self.screen.fill(self.COLOR_BG, (0, 0, self.game_width, self.window_height))
         # reset dynamic layout markers each frame
         self.hud_y_after_room_menu = 0
@@ -555,6 +688,14 @@ class Game:
 
     
     def draw_manor(self):
+        """Draw manor grid with room images and door indicators.
+
+        Renders:
+        - Room background images from assets/rooms/
+        - Locked door indicators (red lines with thickness based on lock level)
+        - Open door gaps (black rectangles for visual clarity)
+        - Player position indicator (blue circle)
+        """
         # --- 1. Dessiner le manoir ---
         for y in range(self.ROWS):
             for x in range(self.COLS):
@@ -573,7 +714,16 @@ class Game:
                         pygame.draw.rect(self.screen, (100, 100, 100), rect)
 
     def draw_door_selector(self, px, py):
-        """Dessine la barre blanche autour de la porte sélectionnée."""
+        """Draw white indicator bar around currently selected door.
+
+        Parameters:
+        - px: int, player's x grid coordinate
+        - py: int, player's y grid coordinate
+
+        Renders:
+        - White bar (8px thick) on the selected edge (up/down/left/right)
+        - Positioned relative to room cell with 10px inset from corners
+        """
         x = px * self.cell_size
         y = py * self.cell_size
         w = self.cell_size
@@ -593,7 +743,20 @@ class Game:
         pygame.draw.rect(self.screen, self.COLOR_WHITE, rect)
 
     def draw_inventory(self, player, hud_rect):
-        """Affiche l'inventaire."""
+        """Render player inventory in HUD.
+
+        Parameters:
+        - player: Player instance with stats and permanent objects
+        - hud_rect: pygame.Rect defining HUD area
+
+        Displays:
+        - "Consumables" section: steps, coins, gems, keys, dice with icons
+        - Horizontal divider line
+        - "Objets permanents" section: list of permanent items or "(aucun)"
+        
+        Side effects:
+        - Sets self.hud_y_after_inventory for layout tracking
+        """
         margin_x = hud_rect.left + 40
         y = hud_rect.top + 40
         color = self.COLOR_TEXT
@@ -638,6 +801,22 @@ class Game:
         self.hud_y_after_inventory = y
 
     def draw_room_choice_menu(self, hud_rect):
+        """Render room drafting menu with 3 choices.
+
+        Parameters:
+        - hud_rect: pygame.Rect defining HUD area
+
+        Displays:
+        - Title "Choose a room to draft"
+        - 3 room cards with images (90x90px), names, and gem costs
+        - Blue frame around selected card (using menu_index)
+        - Color-coded cost text (green for free, red if unaffordable, white otherwise)
+        - Reroll prompt with available dice count
+
+        Side effects:
+        - Sets self.hud_y_after_room_menu for message layout
+        - Dynamically positions below inventory with bounds clamping
+        """
         color = self.COLOR_TEXT
         # Place below inventory/permanents if needed, with bounds clamp
         default_base_y = hud_rect.top + 400
@@ -691,11 +870,33 @@ class Game:
             self.hud_y_after_room_menu = bottom
 
     def add_message(self, text: str):
+        """Add a message to the log, maintaining max_messages limit.
+
+        Parameters:
+        - text: str, message text to append
+
+        Effects:
+        - Appends to self.messages list
+        - Removes oldest message if list exceeds max_messages (10)
+        """
         self.messages.append(text)
         if len(self.messages) > self.max_messages:
             self.messages.pop(0)
 
     def draw_messages(self, hud_rect):
+        """Render message log in HUD.
+
+        Parameters:
+        - hud_rect: pygame.Rect defining HUD area
+
+        Displays:
+        - "Messages:" title
+        - List of recent messages (up to max_messages)
+
+        Positioning:
+        - Dynamically placed below inventory and room menu
+        - Clamped to prevent overflow at bottom of HUD
+        """
         x = hud_rect.left + 40
         # Place messages below inventory/permanents if needed, with bounds clamp
         default_y = hud_rect.top + 600
@@ -714,6 +915,21 @@ class Game:
 
 
     def draw_shop_menu(self, hud_rect):
+        """Render shop interface when in yellow room.
+
+        Parameters:
+        - hud_rect: pygame.Rect defining HUD area
+
+        Displays:
+        - "Magasin :" title
+        - List of shop items with names and gold costs
+        - Highlights selected item (yellow) when shop_menu_active
+        - Controls hint (M to open/close, UP/DOWN + SPACE to buy)
+
+        Side effects:
+        - Initializes shop_items if not already set
+        - Only renders when is_in_shop_room() returns True
+        """
         # afficher seulement dans une pièce jaune
         if not self.is_in_shop_room():
             return
@@ -726,7 +942,7 @@ class Game:
 
         # initialiser items si nécessaire (sans activation)
         if not hasattr(self, 'shop_items') or not self.shop_items:
-            self.open_shop_menu(None)
+            self.open_shop_menu()
 
         for i, (name, cost, _) in enumerate(self.shop_items):
             color = (255, 215, 0) if (self.shop_menu_active and i == self.shop_index) else self.COLOR_TEXT
@@ -749,7 +965,21 @@ class Game:
 
 
     def draw_room_objects(self, hud_rect):
-        """Shows the objects in the current Room"""
+        """Display objects available in current room.
+
+        Parameters:
+        - hud_rect: pygame.Rect defining HUD area
+
+        Displays:
+        - "Objets à ramasser:" title
+        - List of objects with details:
+          - Consumables show "x valeur"
+          - Casier shows "[Clé requise]"
+          - Coffre shows "[Marteau ou Clé requis]"
+          - EndroitCreuser shows "[Pelle requise]"
+        - Highlights selected object (yellow) when pickup_menu_active
+        - Controls hint (E to open/close, UP/DOWN + SPACE to interact)
+        """
         x = hud_rect.left + 500
         y = hud_rect.top + 40
 
@@ -807,6 +1037,9 @@ class Game:
             self.screen.blit(hint2, (x, y))
 
     def draw_game_over_overlay(self):
+        """
+            Render game over screen overlay.
+        """
         # Dark transparent overlay
         overlay = pygame.Surface((self.window_width, self.window_height))
         overlay.set_alpha(180)
@@ -841,6 +1074,9 @@ class Game:
         self.screen.blit(instr2, (panel_x + 30, panel_y + panel_h - 30))
 
     def draw_victory_overlay(self):
+        """
+            Render victory screen overlay.
+        """
         # Dark transparent overlay
         overlay = pygame.Surface((self.window_width, self.window_height))
         overlay.set_alpha(150)

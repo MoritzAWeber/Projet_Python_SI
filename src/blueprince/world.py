@@ -64,7 +64,11 @@ def generate_random_loot(player, item_pool, found_permanents=None):
 # ==============================
 
 class ShopEffect:
-    """Effet commun à toutes les pièces jaunes : achat automatique du meilleur objet que le joueur peut se payer."""
+    """Mixin for yellow rooms providing shop functionality.
+    
+    Yellow rooms allow players to purchase items with gold.
+    Shop menu is opened via M key when in yellow room.
+    """
 
     SHOP_ITEMS = [
         ("Pomme", 2, lambda player: player.gagner_pas(2)),
@@ -79,6 +83,15 @@ class ShopEffect:
     ]
 
     def apply_effect_on_enter(self, player):
+        """Prepare shop menu when entering yellow room.
+        
+        Parameters:
+        - player: Player instance with game reference
+        
+        Side effects:
+        - Calls game.open_shop_menu to initialize items
+        - Shows message prompting player to press M
+        """
         # Ne plus ouvrir automatiquement le menu du shop; uniquement préparer via appel existant.
         if hasattr(player, "game"):
             try:
@@ -90,18 +103,27 @@ class ShopEffect:
 
 
 class Room(ABC):
+    """Abstract base class for all manor rooms.
+    
+    Handles room properties, door connections, item generation,
+    rotation mechanics, and room-specific effects.
+    """
     def __init__(self, name, image=None, doors=None, gem_cost=0, item_pool=None,
                  objets=None, rarity=0, placement_condition="any",
                  color="blue", base_weight=1.0):
-        """
-        name : nom interne de la pièce
-        image : surface pygame (image de la pièce)
-        doors : liste de directions accessibles ["up","down","left","right"]
-        gem_cost : coût en gemmes pour tirer cette pièce
-        objets : liste d'objets présents dans la pièce
-        rarity : niveau de rareté (0=commun, 3=très rare)
-        placement_condition : "any", "edge", "center", "top", "bottom"
-        color : "blue", "green", "purple", "yellow", "orange", "red"
+        """Initialize room with properties and configuration.
+        
+        Parameters:
+        - name: str, internal room identifier
+        - image: pygame.Surface, room background sprite
+        - doors: list[str], available directions ["up", "down", "left", "right"]
+        - gem_cost: int, gems required to draft this room (default 0)
+        - item_pool: list[Objet], candidate items for loot generation
+        - objets: list[Objet], items currently in room
+        - rarity: int, 0=common, 1-3=increasingly rare
+        - placement_condition: str, "any"/"edge"/"center"/"top"/"bottom"
+        - color: str, room type: "blue"/"green"/"purple"/"yellow"/"orange"/"red"
+        - base_weight: float, base probability multiplier for room draws
         """
         self.base_weight = base_weight
         self.name = name
@@ -121,11 +143,28 @@ class Room(ABC):
         self.effect_triggered = False
 
     def has_door(self, direction):
+        """Check if room has door in specified direction.
+        
+        Parameters:
+        - direction: str, one of "up", "down", "left", "right"
+        
+        Returns:
+        - bool: True if door exists
+        """
         return direction in self.doors
     
 
     def generate_loot_on_enter(self, player):
-        """Generate loot with player luck modifiers on first room entry."""
+        """Generate loot with player luck modifiers on first room entry.
+        
+        Parameters:
+        - player: Player instance for luck modifiers
+        
+        Effects:
+        - Calls generate_random_loot with player luck bonuses
+        - Extends self.objets with generated items
+        - Sets loot_generated flag to prevent regeneration
+        """
         if not self.loot_generated and self.item_pool:
             manor = getattr(player, "manor", None)
             found_perms = getattr(manor, 'found_permanents', set()) if manor else set()
@@ -134,7 +173,17 @@ class Room(ABC):
             self.loot_generated = True
 
     def create_rotated_copy(self, num_rotations):
-        """Creates a copy of this room rotated by num_rotations * 90 degrees."""
+        """Creates a copy of this room rotated by num_rotations * 90 degrees.
+        
+        Parameters:
+        - num_rotations: int, number of 90-degree clockwise rotations (0-3)
+        
+        Returns:
+        - Room: new instance with rotated doors and image
+        
+        Door rotation mapping:
+        - up → right → down → left → up
+        """
         if num_rotations == 0:
             return self  # No rotation needed, return self
         
@@ -170,15 +219,32 @@ class Room(ABC):
 
     
     def get_all_rotations(self):
-        """Returns a list of all possible rotations of this room."""
+        """Returns a list of all possible rotations of this room.
+        
+        Returns:
+        - list[Room]: 4 versions (0°, 90°, 180°, 270°)
+        """
         return [self.create_rotated_copy(i) for i in range(4)]
 
     def apply_effect_on_choose(self, player):
-        """Effet éventuel déclenché au moment où la pièce est choisie dans le tirage."""
+        """Effect triggered when room is chosen during draft.
+        
+        Parameters:
+        - player: Player instance
+        
+        Note: Override in subclasses for rooms with draft-time effects.
+        """
         pass
 
     def apply_effect_on_enter(self, player):
-        """Default behavior: generate loot on first entry."""
+        """Effect triggered when player enters room.
+        
+        Parameters:
+        - player: Player instance
+        
+        Default behavior: Generate loot on first entry.
+        Override in subclasses for additional room-specific effects.
+        """
         self.generate_loot_on_enter(player)
 
 
@@ -186,6 +252,11 @@ class Room(ABC):
 # Pièces fixes : début / fin
 # ==============================
 class EntranceHall(Room):
+    """Starting room at bottom of manor (Y=8).
+    
+    Fixed placement, always present at game start.
+    Doors: up, left, right.
+    """
     def __init__(self):
         super().__init__(
             name="EntranceHall",
@@ -198,6 +269,11 @@ class EntranceHall(Room):
 
 
 class Antechamber(Room):
+    """Victory room at top of manor (Y=0).
+    
+    Fixed placement, reaching this room wins the game.
+    Doors: down, left, right.
+    """
     def __init__(self):
         super().__init__(
             name="Antechamber",
@@ -213,8 +289,13 @@ class Antechamber(Room):
 # ==============================
 
 class Greenhouse(Room):
-    """
-    Effet : Augmente le bonus de tirage (RÉPÉTABLE).
+    """Green room that increases draft bonus for green rooms (repeatable).
+    
+    Effect: Increments manor.green_draw_bonus by 1 on each entry.
+    This multiplier increases weight of green rooms in future drafts.
+    
+    Rarity: 1 (uncommon)
+    Placement: Edge only
     """
     def __init__(self):
         super().__init__(
@@ -241,8 +322,10 @@ class Greenhouse(Room):
         self.generate_loot_on_enter(player)
 
 class MorningRoom(Room):
-    """
-    Effet : Donne +2 gemmes (UNE SEULE FOIS).
+    """Green room that grants +2 gems (one-time effect).
+    
+    Rarity: 1 (uncommon)
+    Placement: Edge only
     """
     def __init__(self):
         super().__init__(
@@ -268,8 +351,13 @@ class MorningRoom(Room):
 
 
 class SecretGarden(Room):
-    """
-    Effet : Disperse des fruits (UNE SEULE FOIS).
+    """Green room that spreads fruit items throughout manor (one-time effect).
+    
+    Effect: 20% chance per room to receive Pomme or Banane.
+    Redirected to ConferenceRoom if that redirect is active.
+    
+    Rarity: 2 (rare)
+    Placement: Edge only
     """
     def __init__(self):
         super().__init__(
@@ -314,8 +402,13 @@ class SecretGarden(Room):
 
 
 class Veranda(Room):
-    """
-    Effet : Active un flag (UNE SEULE FOIS).
+    """Green room that activates green item bonus flag (one-time effect).
+    
+    Effect: Sets manor.green_item_bonus to True.
+    
+    Rarity: 1 (uncommon)
+    Placement: Edge only
+    Cost: 2 gems
     """
     def __init__(self):
         super().__init__(
@@ -345,6 +438,12 @@ class Veranda(Room):
 
 
 class Cloister(Room):
+    """Green crossroads room with 4 doors.
+    
+    Rarity: 1 (uncommon)
+    Placement: Center only
+    Cost: 3 gems
+    """
     def __init__(self):
         super().__init__(
             name="Cloister",
@@ -358,6 +457,11 @@ class Cloister(Room):
         )
 
 class Courtyard(Room):
+    """Green room with 3 doors and dig spots.
+    
+    Rarity: 1 (uncommon)
+    Placement: Center only
+    """
     def __init__(self):
         super().__init__(
             name="Courtyard",
@@ -370,8 +474,12 @@ class Courtyard(Room):
         )
 
 class Patio(Room):
-    """
-    Effet : Ajoute des gemmes aux pièces (UNE SEULE FOIS).
+    """Green room that adds +1 gem to all green rooms (one-time effect).
+    
+    Effect: Appends Gemmes(1) to objets of every green room in manor.
+    
+    Rarity: 2 (rare)
+    Placement: Edge only
     """
     def __init__(self):
         super().__init__(
@@ -406,8 +514,12 @@ class Patio(Room):
 
 
 class Terrace(Room):
-    """
-    Effet : Active un flag (UNE SEULE FOIS).
+    """Green room that makes all green rooms free (one-time effect).
+    
+    Effect: Sets manor.green_rooms_free flag, zeroing gem_cost for green rooms.
+    
+    Rarity: 1 (uncommon)
+    Placement: Edge only
     """
     def __init__(self):
         super().__init__(
@@ -440,8 +552,14 @@ class Terrace(Room):
 # ==============================
 
 class HerLadyshipsChamber(Room):
-    """
-    Effet : Active des bonus (UNE SEULE FOIS).
+    """Purple room that activates bonuses for Boudoir and WalkInCloset (one-time).
+    
+    Effect:
+    - Sets manor.bonus_next_boudoir_steps to 10
+    - Sets manor.bonus_next_walkin_gems to 3
+    
+    Rarity: 2 (rare)
+    Placement: Any
     """
     def __init__(self):
         super().__init__(
@@ -466,8 +584,13 @@ class HerLadyshipsChamber(Room):
 
 
 class MasterBedroom(Room):
-    """
-    Effet : Donne des pas
+    """Purple room granting steps equal to number of placed rooms (repeatable).
+    
+    Effect: Grants +1 step per room in manor on each entry.
+    
+    Rarity: 2 (rare)
+    Placement: Any
+    Cost: 2 gems
     """
     def __init__(self):
         super().__init__(
@@ -492,8 +615,13 @@ class MasterBedroom(Room):
 
 
 class Nursery(Room):
-    """
-    Effet : Active un bonus 
+    """Purple room that grants +5 steps when drafting bedrooms (one-time flag).
+    
+    Effect: Sets manor.bonus_on_draft_bedroom flag.
+    Bedroom, BunkRoom, and GuestBedroom grant +5 steps when chosen.
+    
+    Rarity: 1 (uncommon)
+    Placement: Any
     """
     def __init__(self):
         super().__init__(
@@ -519,8 +647,12 @@ class Nursery(Room):
 
 
 class ServantsQuarters(Room):
-    """
-    Effet : Donne des clés (RÉPÉTABLE).
+    """Purple room granting keys based on bedrooms in manor (repeatable).
+    
+    Effect: +1 key per Bedroom, +2 keys per BunkRoom.
+    
+    Rarity: 1 (uncommon)
+    Placement: Any
     """
     def __init__(self):
         super().__init__(
@@ -554,8 +686,10 @@ class ServantsQuarters(Room):
 
 
 class Bedroom(Room):
-    """
-    Effet : Donne +2 pas 
+    """Common purple room granting +2 steps (repeatable).
+    
+    Rarity: 0 (common)
+    Placement: Any
     """
     def __init__(self):
         super().__init__(
@@ -577,8 +711,13 @@ class Bedroom(Room):
 
 
 class Boudoir(Room):
-    """
-    Effet : Consomme un bonus 
+    """Purple room that consumes HerLadyshipsChamber bonus for extra steps.
+    
+    Effect: If manor.bonus_next_boudoir_steps > 0, grant that many steps
+    and reset bonus to 0.
+    
+    Rarity: 1 (uncommon)
+    Placement: Any
     """
     def __init__(self):
         super().__init__(
@@ -604,6 +743,11 @@ class Boudoir(Room):
 
 
 class BunkRoom(Room):
+    """Purple bedroom with gold and dice.
+    
+    Rarity: 2 (rare)
+    Placement: Any
+    """
     def __init__(self):
         super().__init__(
             name="BunkRoom",
@@ -616,8 +760,10 @@ class BunkRoom(Room):
         )
 
 class GuestBedroom(Room):
-    """
-    Effet : Donne +10 pas (UNE SEULE FOIS, selon votre règle).
+    """Purple room granting +10 steps (one-time effect).
+    
+    Rarity: 1 (uncommon)
+    Placement: Any
     """
     def __init__(self):
         super().__init__(
@@ -1224,8 +1370,15 @@ class Armory(ShopEffect, Room):
 # Catalogue / Factory
 # ==============================
 def build_room_catalog():
-    """Construit un nouveau catalogue d'instances fraîches pour une partie.
-    Évite la réutilisation d'objets mutés entre plusieurs runs (ROOM_CATALOG global)."""
+    """Build fresh room catalog for a new game.
+    
+    Returns:
+    - list[Room]: Complete set of room instances
+    
+    Creates new instances to avoid state mutation between runs.
+    Includes duplicates for common rooms to adjust draw probabilities
+    and to be able to draw rooms multiple times.
+    """
     return [
         EntranceHall(),
         Antechamber(),
@@ -1329,6 +1482,14 @@ ROOM_CATALOG = build_room_catalog()
 # Classe Manor
 # ==============================
 class Manor:
+    """Represents the 5x9 manor grid and manages room placement and drafting.
+    
+    Handles:
+    - Room placement with door compatibility
+    - Room draft mechanics with rotation and filtering
+    - Global effect flags (green bonuses, bedroom bonuses, etc.)
+    - Weight calculations for room draw probabilities
+    """
     WIDTH = 5
     HEIGHT = 9
 
@@ -1340,6 +1501,14 @@ class Manor:
     }
 
     def __init__(self):
+        """Initialize manor with empty grid and fresh room catalog.
+        
+        Sets up:
+        - 5x9 grid initialized to None
+        - Fresh room catalog (excluding EntranceHall and Antechamber)
+        - Global effect flags for room bonuses
+        - Fixed placement of EntranceHall (2, 8) and Antechamber (2, 0)
+        """
         # Grille de pièces
         self.grid = [[None for _ in range(self.WIDTH)] for _ in range(self.HEIGHT)]
 
@@ -1380,14 +1549,46 @@ class Manor:
 
     # ---------------- utilitaires de grille ----------------
     def in_bounds(self, x, y):
+        """Check if coordinates are within manor grid.
+        
+        Parameters:
+        - x: int, column (0-4)
+        - y: int, row (0-8)
+        
+        Returns:
+        - bool: True if valid position
+        """
         return 0 <= x < self.WIDTH and 0 <= y < self.HEIGHT
 
     def get_room(self, x, y):
+        """Get room at specified grid position.
+        
+        Parameters:
+        - x: int, column
+        - y: int, row
+        
+        Returns:
+        - Room or None: room instance if present
+        """
         if self.in_bounds(x, y):
             return self.grid[y][x]
         return None
 
     def place_room(self, x, y, room):
+        """Place room at grid position and remove from catalog.
+        
+        Parameters:
+        - x: int, column
+        - y: int, row
+        - room: Room instance to place
+        
+        Side effects:
+        - Sets grid[y][x] to room
+        - Removes original room from room_catalog by name
+        
+        Raises:
+        - ValueError: if position out of bounds
+        """
         if not self.in_bounds(x, y):
             raise ValueError("Position hors limites.")
         self.grid[y][x] = room
@@ -1400,7 +1601,18 @@ class Manor:
                 break
 
     def get_room_weight(self, room):
-        """Poids = base_weight × (1/3)^rarity × bonus verts × bonus rareté."""
+        """Calculate weighted probability for room draw.
+        
+        Parameters:
+        - room: Room instance
+        
+        Returns:
+        - float: weight = base_weight × (1/3)^rarity × bonuses
+        
+        Bonuses:
+        - Greenhouse: green rooms get (1 + green_draw_bonus) multiplier
+        - Library: rarity ≥ 2 rooms get (1 + rarity_bias) multiplier
+        """
         w = room.base_weight * (1.0 / 3.0) ** room.rarity
 
         # Bonus Greenhouse
@@ -1417,14 +1629,27 @@ class Manor:
 
     # ---------------- tirage de pièces ----------------
     def draw_three_rooms(self, current_pos, direction, room_catalog):
-        """
-        Tire 3 pièces compatibles selon la position du joueur et la direction choisie.
-        - Respecte les portes compatibles (avec rotation)
-        - Évite les murs du manoir
-        - Respecte les conditions de placement (edge, center, top, bottom)
-        - Pas de doublons dans le tirage
-        - Garantit au moins une pièce gratuite (gem_cost == 0)
-        - Prend en compte certains effets globaux (Terrace, Greenhouse)
+        """Draw 3 compatible rooms for placement at target position.
+        
+        Parameters:
+        - current_pos: tuple[int, int], player's (x, y) position
+        - direction: str, direction player is opening ("up"/"down"/"left"/"right")
+        - room_catalog: list[Room], available rooms
+        
+        Returns:
+        - list[Room]: up to 3 room instances (may include rotations)
+        
+        Filtering rules:
+        - Rooms must have compatible door (opposite of direction)
+        - All room doors must point within manor bounds
+        - Respects placement_condition (edge/center/top/bottom)
+        - No duplicate room names in draw
+        - Guarantees at least one free room (gem_cost == 0)
+        
+        Weight modifiers:
+        - Terrace effect: green rooms become free
+        - Greenhouse effect: green rooms weighted higher
+        - Library effect: rare rooms weighted higher
         """
         x, y = current_pos
         dx, dy = self.get_direction_offset(direction)
@@ -1562,7 +1787,14 @@ class Manor:
         return choices[:3]  # Return maximum 3 rooms
     
     def get_direction_offset(self, direction):
-        """Retourne (dx, dy) pour une direction donnée."""
+        """Convert direction string to grid offset.
+        
+        Parameters:
+        - direction: str, one of "up"/"down"/"left"/"right"
+        
+        Returns:
+        - tuple[int, int]: (dx, dy) offset
+        """
         if direction == "up":
             return (0, -1)
         elif direction == "down":
@@ -1574,11 +1806,19 @@ class Manor:
         return (0, 0)
 
     def get_possible_rooms(self, position, direction, room_catalog):
-        """
-        Retourne les pièces qui peuvent être placées dans la
-        direction donnée depuis la position actuelle :
-        - la case cible doit être vide
-        - la pièce doit avoir une porte dans la direction opposée
+        """Get rooms that can be placed in specified direction.
+        
+        Parameters:
+        - position: tuple[int, int], current (x, y)
+        - direction: str, movement direction
+        - room_catalog: list[Room], available rooms
+        
+        Returns:
+        - list[Room]: rooms with compatible opposite door
+        
+        Requirements:
+        - Target cell must be empty and in bounds
+        - Room must have door in opposite direction
         """
         x, y = position
         dx, dy = self.get_direction_offset(direction)
@@ -1591,9 +1831,12 @@ class Manor:
         return [r for r in room_catalog if required_door in getattr(r, "doors", [])]
 
     def can_advance(self):
-        """
-        Vérifie s'il reste au moins un déplacement possible
-        (pour les conditions de fin de partie).
+        """Check if any movement is possible (for game over condition).
+        
+        Returns:
+        - bool: True if at least one room can be placed from any current room
+        
+        Scans all placed rooms (except Antechamber) for available expansions.
         """
         for y in range(self.HEIGHT):
             for x in range(self.WIDTH):
