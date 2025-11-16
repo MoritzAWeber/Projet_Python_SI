@@ -57,6 +57,36 @@ def generate_random_loot(player, item_pool, found_permanents=None):
 # ==============================
 # Classe abstraite Room
 # ==============================
+
+# ==============================
+# SHOP EFFECT (effet commun à toutes les pièces jaunes)
+# ==============================
+
+class ShopEffect:
+    """Effet commun à toutes les pièces jaunes : achat automatique du meilleur objet que le joueur peut se payer."""
+
+    SHOP_ITEMS = [
+        ("Pomme", 2, lambda player: player.gagner_pas(2)),
+        ("Banane", 3, lambda player: player.gagner_pas(3)),
+        ("Gâteau", 8, lambda player: player.gagner_pas(10)),
+        ("Sandwich", 12, lambda player: player.gagner_pas(15)),
+        ("Repas", 20, lambda player: player.gagner_pas(25)),
+
+        ("Clé", 10, lambda player: setattr(player, "cles", player.cles + 1)),
+        ("Gemme", 3, lambda player: setattr(player, "gemmes", player.gemmes + 1)),
+        ("Pelle", 6, lambda player: player.inventory.add_item(Pelle())),
+    ]
+
+    def apply_effect_on_enter(self, player):
+        # Ne plus ouvrir automatiquement le menu du shop; uniquement préparer via appel existant.
+        if hasattr(player, "game"):
+            try:
+                player.game.open_shop_menu(self)  # prépare les items sans activation
+            except Exception:
+                pass
+
+
+
 class Room(ABC):
     def __init__(self, name, image=None, doors=None, gem_cost=0, item_pool=None,
                  objets=None, rarity=0, placement_condition="any",
@@ -90,6 +120,7 @@ class Room(ABC):
 
     def has_door(self, direction):
         return direction in self.doors
+    
 
     def generate_loot_on_enter(self, player):
         """Generate loot with player luck modifiers on first room entry."""
@@ -101,21 +132,14 @@ class Room(ABC):
             self.loot_generated = True
 
     def create_rotated_copy(self, num_rotations):
-        """Effect:
-        Creates a rotated logical copy preserving the subclass. Performs a
-        clockwise rotation num_rotations * 90° of doors and image. Returns self
-        unchanged if num_rotations == 0. Each rotated copy gets its own objets
-        list (shallow copy) and rotation angle.
-
-        Parameters:
-        - num_rotations (int): Number of clockwise quarter turns (0–3).
-
-        Returns:
-        - Room: New instance of the same subclass with rotated doors/image.
-        """
+        """Creates a copy of this room rotated by num_rotations * 90 degrees."""
         if num_rotations == 0:
-            return self
+            return self  # No rotation needed, return self
+        
+        # Manually create a new room instance with rotated attributes
         rotated_doors = self.original_doors.copy()
+        
+        # Apply rotation num_rotations times
         for _ in range(num_rotations):
             rotation_map = {"up": "right", "right": "down", "down": "left", "left": "up"}
             rotated_doors = [rotation_map[d] for d in rotated_doors]
@@ -141,6 +165,7 @@ class Room(ABC):
         rotated.effect_triggered = self.effect_triggered  # Always copy this flag
             
         return rotated
+
     
     def get_all_rotations(self):
         """Returns a list of all possible rotations of this room."""
@@ -209,7 +234,6 @@ class Greenhouse(Room):
         if not hasattr(manor, "green_draw_bonus"):
             manor.green_draw_bonus = 0
         manor.green_draw_bonus += 1
-        print("Greenhouse : bonus de tirage de pièces vertes augmenté.")
         
         # Generate loot with player luck
         self.generate_loot_on_enter(player)
@@ -237,7 +261,6 @@ class MorningRoom(Room):
         self.generate_loot_on_enter(player)
         
         player.gemmes += 2
-        print("Morning Room : vous gagnez 2 gemmes.")
         self.effect_triggered = True 
 
 
@@ -271,12 +294,10 @@ class SecretGarden(Room):
         target_conf = getattr(manor, "redirect_spread_to_conference", None)
 
         if target_conf is not None:
-            print("Secret Garden : les fruits sont redirigés vers la Conference Room.")
             for _ in range(manor.WIDTH * manor.HEIGHT):
                 if random.random() < 0.20:
                     target_conf.objets.append(random.choice(fruits))
         else:
-            print("Secret Garden : ajout de fruits dans plusieurs pièces existantes.")
             for y in range(manor.HEIGHT):
                 for x in range(manor.WIDTH):
                     room = manor.get_room(x, y)
@@ -314,7 +335,6 @@ class Veranda(Room):
         if manor is None:
             return
         manor.green_item_bonus = True
-        print("Veranda : bonus d'objets dans les futures pièces vertes activé.")
         self.effect_triggered = True 
 
 
@@ -369,7 +389,6 @@ class Patio(Room):
         if manor is None:
             return
 
-        print("Patio : ajout d'une gemme dans chaque pièce verte déjà placée.")
         for y in range(manor.HEIGHT):
             for x in range(manor.WIDTH):
                 room = manor.get_room(x, y)
@@ -405,7 +424,6 @@ class Terrace(Room):
         if manor is None:
             return
         manor.green_rooms_free = True
-        print("Terrace : toutes les pièces vertes deviennent gratuites à tirer.")
         self.effect_triggered = True 
 
 
@@ -435,7 +453,6 @@ class HerLadyshipsChamber(Room):
         manor = player.manor
         manor.bonus_next_boudoir_steps = 10
         manor.bonus_next_walkin_gems = 3
-        print("Her Ladyship’s Chamber : prochain Boudoir = +10 pas, prochain Walk-in Closet = +3 gemmes.")
         self.effect_triggered = True 
 
 
@@ -462,7 +479,6 @@ class MasterBedroom(Room):
         manor = player.manor
         count = sum(1 for y in range(manor.HEIGHT) for x in range(manor.WIDTH) if manor.get_room(x, y))
         player.gagner_pas(count)
-        print(f"Master Bedroom : +{count} pas (nombre total de pièces placées).")
 
 
 class Nursery(Room):
@@ -488,7 +504,6 @@ class Nursery(Room):
         self.generate_loot_on_enter(player)
         
         player.manor.bonus_on_draft_bedroom = True
-        print("Nursery : désormais, chaque draft d'une Bedroom donne +5 pas.")
         self.effect_triggered = True 
 
 
@@ -524,7 +539,6 @@ class ServantsQuarters(Room):
                     count += 2  
 
         player.cles += count
-        print(f"Servant’s Quarters : +{count} clés (nombre total de Bedrooms).")
 
 
 class Bedroom(Room):
@@ -547,7 +561,6 @@ class Bedroom(Room):
         self.generate_loot_on_enter(player)
         
         player.gagner_pas(2)
-        print("Bedroom : +2 pas.")
 
 
 class Boudoir(Room):
@@ -574,7 +587,6 @@ class Boudoir(Room):
             bonus = manor.bonus_next_boudoir_steps
             player.gagner_pas(bonus)
             manor.bonus_next_boudoir_steps = 0
-            print(f"Boudoir : bonus spécial +{bonus} pas consommé.")
 
 
 class BunkRoom(Room):
@@ -612,7 +624,6 @@ class GuestBedroom(Room):
         self.generate_loot_on_enter(player)
         
         player.gagner_pas(10)
-        print("Guest Bedroom : +10 pas.")
         self.effect_triggered = True 
 
 
@@ -716,7 +727,6 @@ class Foyer(Room):
         self.generate_loot_on_enter(player)
         
         player.manor.hallway_doors_unlocked = True
-        print("Foyer : toutes les portes de Hallway sont déverrouillées.")
         self.effect_triggered = True 
 
 
@@ -743,7 +753,6 @@ class SecretPassage(Room):
         self.generate_loot_on_enter(player)
         
         player.manor.next_room_color_choice = True
-        print("Secret Passage : vous pourrez choisir la couleur du prochain tirage.")
         self.effect_triggered = True 
 
 
@@ -780,12 +789,10 @@ class LockerRoom(Room):
         target_conf = getattr(manor, "redirect_spread_to_conference", None)
 
         if target_conf is not None:
-            print("Locker Room : les clés sont redirigées vers la Conference Room.")
             for _ in range(manor.WIDTH * manor.HEIGHT):
                 if random.random() < 0.20:
                     target_conf.objets.append(Cles(1))
         else:
-            print("Locker Room : répartition de clés dans plusieurs pièces.")
             for y in range(manor.HEIGHT):
                 for x in range(manor.WIDTH):
                     room = manor.get_room(x, y)
@@ -820,7 +827,6 @@ class Vault(Room):
         self.generate_loot_on_enter(player)
         
         player.or_ += 40
-        print("Vault : vous gagnez 40 pièces d'or.")
         self.effect_triggered = True 
 
 
@@ -849,7 +855,6 @@ class Workshop(Room):
         permanents = [Pelle(), Marteau(), DetecteurMetaux(), PatteLapin()]
         item = random.choice(permanents)
         player.inventory.add_item(item)
-        print(f"Workshop : vous obtenez un objet permanent ({item.nom}).")
         self.effect_triggered = True 
 
 
@@ -873,7 +878,6 @@ class BoilerRoom(Room):
         self.generate_loot_on_enter(player)
         
         player.gagner_pas(3)
-        print("Boiler Room : +3 pas.")
 
 
 class ConferenceRoom(Room):
@@ -900,7 +904,6 @@ class ConferenceRoom(Room):
         
         manor = player.manor
         manor.redirect_spread_to_conference = self
-        print("Conference Room : tous les futurs effets 'spread' seront redirigés ici.")
         self.effect_triggered = True 
 
 
@@ -927,7 +930,6 @@ class Gallery(Room):
         self.generate_loot_on_enter(player)
         
         player.gemmes += 1
-        print("Gallery : vous gagnez 1 gemme.")
         self.effect_triggered = True 
 
 
@@ -954,7 +956,7 @@ class Garage(Room):
         self.generate_loot_on_enter(player)
         
         player.cles += 3
-        print("Garage : vous gagnez 3 clés.")
+        # removed debug: Garage +3 keys
         self.effect_triggered = True 
 
 
@@ -979,7 +981,6 @@ class Library(Room):
         
         manor = player.manor
         manor.rarity_bias += 1
-        print("Library : biais de rareté augmenté (tirage de pièces rares favorisé).")
 
 
 class RumpusRoom(Room):
@@ -1005,7 +1006,6 @@ class RumpusRoom(Room):
         self.generate_loot_on_enter(player)
         
         player.or_ += 8
-        print("Rumpus Room : +8 pièces d'or.")
         self.effect_triggered = True 
 
 
@@ -1032,7 +1032,6 @@ class Pantry(Room):
         self.generate_loot_on_enter(player)
         
         player.or_ += 4
-        print("Pantry : +4 pièces d'or.")
         self.effect_triggered = True 
 
 
@@ -1059,7 +1058,6 @@ class Room8(Room):
         self.generate_loot_on_enter(player)
         
         player.gemmes += 1
-        print("Room 8 : +1 gemme.")
         self.effect_triggered = True 
 
 
@@ -1089,8 +1087,108 @@ class Rotunda(Room):
         for d in self.doors:
             new_doors.append(mapping.get(d, d))
         self.doors = new_doors
-        print(f"Rotunda : les portes ont tourné, nouvelles portes = {self.doors}")
+        # removed debug: Rotunda doors rotated
         
+
+
+# ==============================
+# YELLOW ROOMS (Magasins unifiés)
+# ==============================
+
+class Bookshop(ShopEffect, Room):
+    def __init__(self):
+        super().__init__(
+            name="Bookshop",
+            image=pygame.image.load("assets/rooms/Yellow/Bookshop.png"),
+            doors=["left", "down"],
+            rarity=1,
+            placement_condition="any",
+            color="yellow"
+        )
+
+
+class Commissary(ShopEffect, Room):
+    def __init__(self):
+        super().__init__(
+            name="Commissary",
+            image=pygame.image.load("assets/rooms/Yellow/Commissary.png"),
+            doors=["left", "down"],
+            rarity=1,
+            placement_condition="any",
+            color="yellow"
+        )
+
+
+class Kitchen(ShopEffect, Room):
+    def __init__(self):
+        super().__init__(
+            name="Kitchen",
+            image=pygame.image.load("assets/rooms/Yellow/Kitchen.png"),
+            doors=["down"],
+            rarity=0,
+            placement_condition="any",
+            color="yellow"
+        )
+
+
+class LaundryRoom(ShopEffect, Room):
+    def __init__(self):
+        super().__init__(
+            name="LaundryRoom",
+            image=pygame.image.load("assets/rooms/Yellow/Laundry_Room.png"),
+            doors=["down"],
+            rarity=1,
+            placement_condition="any",
+            color="yellow"
+        )
+
+
+class Locksmith(ShopEffect, Room):
+    def __init__(self):
+        super().__init__(
+            name="Locksmith",
+            image=pygame.image.load("assets/rooms/Yellow/Locksmith.png"),
+            doors=["down"],
+            rarity=2,
+            placement_condition="any",
+            color="yellow"
+        )
+
+
+class GiftShop(ShopEffect, Room):
+    def __init__(self):
+        super().__init__(
+            name="GiftShop",
+            image=pygame.image.load("assets/rooms/Yellow/Mount_Holly_Gift_Shop.png"),
+            doors=["left", "down", "right"],
+            rarity=1,
+            placement_condition="any",
+            color="yellow"
+        )
+
+
+class Showroom(ShopEffect, Room):
+    def __init__(self):
+        super().__init__(
+            name="Showroom",
+            image=pygame.image.load("assets/rooms/Yellow/Showroom.png"),
+            doors=["up", "down"],
+            rarity=2,
+            placement_condition="any",
+            color="yellow"
+        )
+
+
+class Armory(ShopEffect, Room):
+    def __init__(self):
+        super().__init__(
+            name="Armory",
+            image=pygame.image.load("assets/rooms/Yellow/The_Armory.png"),
+            doors=["down", "left"],
+            rarity=2,
+            placement_condition="any",
+            color="yellow"
+        )
 
 
 
@@ -1106,47 +1204,93 @@ def build_room_catalog():
 
         # ---- GREEN ----
         Greenhouse(),
+        Greenhouse(),
+        MorningRoom(),
         MorningRoom(),
         SecretGarden(),
+        SecretGarden(),
+        Veranda(),
         Veranda(),
         Cloister(),
+        Cloister(),
+        Courtyard(),
         Courtyard(),
         Patio(),
+        Patio(),
+        Terrace(),
         Terrace(),
 
         # ---- PURPLE ----
         HerLadyshipsChamber(),
+        HerLadyshipsChamber(),
+        MasterBedroom(),
         MasterBedroom(),
         Nursery(),
+        Nursery(),
+        ServantsQuarters(),
         ServantsQuarters(),
         Bedroom(),
+        Bedroom(),
+        Boudoir(),
         Boudoir(),
         BunkRoom(),
+        BunkRoom(),
+        GuestBedroom(),
         GuestBedroom(),
 
         # ---- ORANGE ROOMS ----
         Corridor(),
+        Corridor(),
+        EastWingHall(),
         EastWingHall(),
         WestWingHall(),
+        WestWingHall(),
+        Hallway(),
         Hallway(),
         Passageway(),
+        Passageway(),
+        GreatHall(),
         GreatHall(),
         Foyer(),
+        Foyer(),
+        SecretPassage(),
         SecretPassage(),
 
         # Blue rooms
         LockerRoom(),
+        LockerRoom(),
+        Vault(),
         Vault(),
         Workshop(),
+        Workshop(),
+        BoilerRoom(),
         BoilerRoom(),
         ConferenceRoom(),
+        ConferenceRoom(),
+        Gallery(),
         Gallery(),
         Garage(),
+        Garage(),
+        Library(),
         Library(),
         RumpusRoom(),
+        RumpusRoom(),
+        Pantry(),
         Pantry(),
         Room8(),
+        Room8(),
         Rotunda(),
+        Rotunda(),
+
+        # Yellow
+        Bookshop(),
+        Commissary(),
+        Kitchen(),
+        LaundryRoom(),
+        Locksmith(),
+        GiftShop(),
+        Showroom(),
+        Armory(),
     ]
 
 # Garder un catalogue initial si besoin ailleurs (non utilisé pour les nouvelles parties)
@@ -1216,22 +1360,13 @@ class Manor:
         return None
 
     def place_room(self, x, y, room):
-        """Effect:
-        Places a room instance at grid coordinate (x, y) after bounds
-        validation, then removes the original (unrotated) room definition
-        from the `room_catalog`.
-
-        Parameters:
-        - x (int): Column index in manor grid.
-        - y (int): Row index in manor grid.
-        room (Room): The room instance (may be a rotated copy) to store.
-        """
         if not self.in_bounds(x, y):
             raise ValueError("Position hors limites.")
         self.grid[y][x] = room
-
-        # Remove original catalog entry (by name) to prevent future draws.
-        for catalog_room in self.room_catalog[:]:
+        
+        # Remove the original room from room_catalog (not rotated copies)
+        # Find the original room by name in the catalog
+        for catalog_room in self.room_catalog[:]:  # Use slice to iterate over copy
             if catalog_room.name == room.name:
                 self.room_catalog.remove(catalog_room)
                 break
@@ -1254,67 +1389,148 @@ class Manor:
 
     # ---------------- tirage de pièces ----------------
     def draw_three_rooms(self, current_pos, direction, room_catalog):
-        """Effect:
-        Builds up to three choices of possible rooms and enforces the
-        at-least-one-free rule if any free options exist.
-
-        Parameters:
-        - current_pos (tuple[int,int]): Origin (x,y).
-        - direction (str): Move direction ('up','down','left','right').
-        - room_catalog (list[Room]): Remaining unplaced room prototypes.
-
-        Returns:
-        - list[Room]: Up to three room instances from the filtered possibilities.
         """
-        possible_rooms = self.get_possible_rooms(current_pos, direction, room_catalog)
+        Tire 3 pièces compatibles selon la position du joueur et la direction choisie.
+        - Respecte les portes compatibles (avec rotation)
+        - Évite les murs du manoir
+        - Respecte les conditions de placement (edge, center, top, bottom)
+        - Pas de doublons dans le tirage
+        - Garantit au moins une pièce gratuite (gem_cost == 0)
+        - Prend en compte certains effets globaux (Terrace, Greenhouse)
+        """
+        x, y = current_pos
+        dx, dy = self.get_direction_offset(direction)
+        nx, ny = x + dx, y + dy
+        
+        # Get all possible room rotations that match the required door
+        required_door = self.opposite_direction[direction]
+        possible_rooms = []
+        
+        for room in room_catalog:
+            # Try all rotations of each room
+            for rotated_room in room.get_all_rotations():
+                if required_door in rotated_room.doors:
+                    # Check placement condition on TARGET position (nx, ny)
+                    cond = rotated_room.placement_condition
+                    
+                    if cond == "edge" and not (nx in (0, self.WIDTH - 1) or ny in (0, self.HEIGHT - 1)):
+                        continue
+                    if cond == "center" and (nx in (0, self.WIDTH - 1) or ny in (0, self.HEIGHT - 1)):
+                        continue
+                    if cond == "top" and ny != 0:
+                        continue
+                    if cond == "bottom" and ny != self.HEIGHT - 1:
+                        continue
+                    
+                    # Check that no doors point outside the manor bounds
+                    valid_doors = True
+                    for door in rotated_room.doors:
+                        door_dx, door_dy = self.get_direction_offset(door)
+                        check_x, check_y = nx + door_dx, ny + door_dy
+                        if not self.in_bounds(check_x, check_y):
+                            valid_doors = False
+                            break
+                    
+                    if not valid_doors:
+                        continue
+                    
+                    possible_rooms.append(rotated_room)
+                    break  # Only add one rotation per room to avoid duplicates
+
+        # Filtrer selon les conditions de placement
+        filtered_rooms = []
+        for room in possible_rooms:
+            cond = room.placement_condition
+
+            if cond == "edge" and not (x in (0, self.WIDTH - 1) or y in (0, self.HEIGHT - 1)):
+                continue
+            if cond == "center" and (x in (0, self.WIDTH - 1) or y in (0, self.HEIGHT - 1)):
+                continue
+            if cond == "top" and y != 0:
+                continue
+            if cond == "bottom" and y != self.HEIGHT - 1:
+                continue
+
+            filtered_rooms.append(room)
+
+        # Si aucune pièce compatible, on propose la pioche complète
+        if not filtered_rooms:
+            filtered_rooms = self.pioche.copy()
+
+        # Effet Terrace : toutes les pièces vertes deviennent gratuites
+        if self.green_rooms_free:
+            for r in filtered_rooms:
+                if getattr(r, "color", "") == "green":
+                    r.gem_cost = 0
+
+        # Assurer au moins une pièce gratuite
+        free_rooms = [r for r in filtered_rooms if r.gem_cost == 0]
+        if not free_rooms:
+            # Si vraiment aucune gratuite, on force la première à coûter 0
+            # (choix arbitraire mais conforme à la règle du projet)
+            filtered_rooms[0].gem_cost = 0
+            free_rooms = [filtered_rooms[0]]
+
+        # garantir une pièce gratuite
+        choices = []
+        first_pick = random.choice(free_rooms)
+        choices.append(first_pick)
+
+        # calcul des poids
+        pool = [r for r in filtered_rooms if r not in choices]
+        weights = [self.get_room_weight(r) for r in pool]
+
+        # tirage des 2 autres rooms
+        for _ in range(2):
+            if not pool:
+                break
+            total_w = sum(weights)
+            r = random.random() * total_w
+
+            cum = 0
+            idx = 0
+            for i, w in enumerate(weights):
+                cum += w
+                if r <= cum:
+                    idx = i
+                    break
+
+            # Ajouter la pièce tirée
+            choices.append(pool[idx])
+
+            # Retirer du pool
+            del pool[idx]
+            del weights[idx]
+
 
         # If no compatible rooms, return empty (should not happen normally)
         if not possible_rooms:
             return []
 
-        # Guarantee at least one free option: if none free, make one free
+        # Separate free and paid rooms
         free_rooms = [r for r in possible_rooms if r.gem_cost == 0]
-        if not free_rooms:
-            possible_rooms[0].gem_cost = 0
-            free_rooms = [possible_rooms[0]]
-
+        paid_rooms = [r for r in possible_rooms if r.gem_cost > 0]
+        
         choices = []
-        # Always include one free room if available
+
+        # Forcer au moins une gratuite
         if free_rooms:
             choices.append(random.choice(free_rooms))
-
-        # Weighted selection for remaining up to 2 choices, without replacement
-        def weighted_pick(pool):
-            weights = []
-            total = 0.0
-            for r in pool:
-                w = getattr(r, "draw_weight", None)
-                if w is None:
-                    try:
-                        w = self.get_room_weight(r)
-                    except Exception:
-                        w = 1.0
-                weights.append(w)
-                total += w
-            if total <= 0:
-                return random.choice(pool)
-            target = random.random() * total
-            acc = 0.0
-            for idx, w in enumerate(weights):
-                acc += w
-                if target <= acc:
-                    return pool[idx]
-            return pool[-1]
-
+        
+        # Add up to 2 more rooms (can be free or paid)
         remaining = [r for r in possible_rooms if r not in choices]
-        for _ in range(2):
-            if not remaining:
-                break
-            pick = weighted_pick(remaining)
-            choices.append(pick)
-            remaining.remove(pick)
-
+        num_to_draw = min(2, len(remaining))
+        if num_to_draw > 0:
+            choices.extend(random.sample(remaining, num_to_draw))
+        
+        # If we have less than 3 choices, fill with what we have
         random.shuffle(choices)
+
+        # removed debug: listing compatible drawn rooms
+        for r in choices:
+            pass  # removed debug per-room listing
+
+        
         return choices[:3]  # Return maximum 3 rooms
     
     def get_direction_offset(self, direction):
@@ -1330,90 +1546,26 @@ class Manor:
         return (0, 0)
 
     def get_possible_rooms(self, position, direction, room_catalog):
-        """Effect:
-        Returns all room instances (including a single valid rotation per base
-        room) that can be legally placed adjacent to `position` in `direction`.
-
-        Parameters:
-        - position (tuple[int, int]): (x, y) origin cell.
-        - direction (str): Direction of movement ('up','down','left','right').
-        - room_catalog (list[Room]): Remaining unplaced rooms in the catalog.
-
-        Returns:
-        - list[Room]: Rotated room instances valid for placement; empty if none.
-
-        Notes:
-        - Applies color-based deterministic effects at candidate time (e.g.,
-          Terrace makes green rooms free) so selection can remain simple.
-        - Computes a transient `draw_weight` per candidate using `get_room_weight`
-          to encapsulate color/rarity bonuses for weighted draws.
+        """
+        Retourne les pièces qui peuvent être placées dans la
+        direction donnée depuis la position actuelle :
+        - la case cible doit être vide
+        - la pièce doit avoir une porte dans la direction opposée
         """
         x, y = position
         dx, dy = self.get_direction_offset(direction)
         nx, ny = x + dx, y + dy
 
-        # Target must be in-bounds and empty
         if not self.in_bounds(nx, ny) or self.get_room(nx, ny):
             return []
 
         required_door = self.opposite_direction[direction]
-        possible_rooms = []
-
-        for room in room_catalog:
-            for rotated_room in room.get_all_rotations():
-                if required_door not in rotated_room.doors:
-                    continue
-
-                # Enforce placement condition on the TARGET (nx, ny)
-                cond = rotated_room.placement_condition
-                if cond == "edge" and not (nx in (0, self.WIDTH - 1) or ny in (0, self.HEIGHT - 1)):
-                    continue
-                if cond == "center" and (nx in (0, self.WIDTH - 1) or ny in (0, self.HEIGHT - 1)):
-                    continue
-                if cond == "top" and ny != 0:
-                    continue
-                if cond == "bottom" and ny != self.HEIGHT - 1:
-                    continue
-
-                # Reject rotations whose doors would lead outside the manor
-                valid_doors = True
-                for door in rotated_room.doors:
-                    door_dx, door_dy = self.get_direction_offset(door)
-                    check_x, check_y = nx + door_dx, ny + door_dy
-                    if not self.in_bounds(check_x, check_y):
-                        valid_doors = False
-                        break
-                if not valid_doors:
-                    continue
-
-                possible_rooms.append(rotated_room)
-                break  # Only keep the first valid rotation per room
-
-        # Apply color-based effects to candidates (does not mutate prototypes)
-        if getattr(self, "green_rooms_free", False):
-            for r in possible_rooms:
-                if getattr(r, "color", "") == "green":
-                    r.gem_cost = 0
-
-        # Compute transient draw weights to carry color/rarity bonuses forward
-        for r in possible_rooms:
-            try:
-                r.draw_weight = self.get_room_weight(r)
-            except Exception:
-                r.draw_weight = 1.0
-
-        return possible_rooms
+        return [r for r in room_catalog if required_door in getattr(r, "doors", [])]
 
     def can_advance(self):
-        """Effect:
-        Scans the entire manor grid to determine if at least one legal
-        move remains.
-
-        Parameters:
-        - None
-
-        Returns:
-        - bool: True if at least one expansion position exists; False otherwise.
+        """
+        Vérifie s'il reste au moins un déplacement possible
+        (pour les conditions de fin de partie).
         """
         for y in range(self.HEIGHT):
             for x in range(self.WIDTH):

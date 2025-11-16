@@ -16,7 +16,7 @@ class Player:
         self.position = [2, 8]  # Starting position
         
         self.pas = 70       # Le joueur commence avec 70 pas    
-        self.or_ = 0            
+        self.or_ = 50          
         self.gemmes = 2         # Commence avec 2
         self.cles = 10           # Commence avec 0 
         self.des = 3          # Commence avec 0 
@@ -144,6 +144,14 @@ class Player:
         self.perdre_pas(1, manor)  # Perdre un pas à chaque déplacement
         self.add_message(f"Vous êtes maintenant dans {next_room.name}. ({self.pas} pas restants)")
         
+        # === FIX SHOP : fermer le shop si on quitte une pièce jaune ===
+        if hasattr(self, "game") and self.game.shop_menu_active:
+            old_color = getattr(current_room, "color", None)
+            new_color = getattr(next_room, "color", None)
+            if old_color == "yellow" and new_color != "yellow":
+                self.game.shop_menu_active = False
+
+
         # Appliquer l'effet du nouveau salon
         next_room.apply_effect_on_enter(self)
 
