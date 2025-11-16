@@ -147,16 +147,6 @@ class Player:
         # Appliquer l'effet du nouveau salon
         next_room.apply_effect_on_enter(self)
 
-    def use_item(self, item_name, player):
-        for item in self.inventory.consumables:
-            if item.nom.lower() == item_name.lower():
-                item.utiliser(player) # L'objet applique son effet
-                
-                # --- MON AJOUT ---
-                self.inventory.consumables.remove(item) # On détruit l'objet consommé
-                break
-
-
 class Inventory:
     def __init__(self):
         self.consumables = []
@@ -421,32 +411,73 @@ class Repas(AutreObjet):
 class Coffre(AutreObjet):
     """Contient des objets peut etre ouvert avec une clé ou un marteau"""
     def __init__(self):
-        super().__init__( "Coffre", "Peut contenir des objets aléatoires")
+        super().__init__( "Coffre", "Peut être ouvert avec une clé ou un marteau")
         self.already_opened = False
 
     def pick_up(self, player):
         """Open chest if player has Marteau"""
+        if self.already_opened:
+            player.add_message("Ce coffre est déjà vide.")
+            return
+            
         if player.inventory.has_permanent("Marteau"):
-            self.open_chest(player)
             player.add_message("Vous utilisez le marteau pour ouvrir le coffre.")
-        elif player.cles > 0:
-            player.add_message("Vous utilisez une clé pour ouvrir le coffre.")
+            self.already_opened = True
             self.open_chest(player)
+        elif player.cles > 0:
             player.cles -= 1
+            player.add_message("Vous utilisez une clé pour ouvrir le coffre.")
+            self.already_opened = True
+            self.open_chest(player)
         else:
-            player.add_message("Vous avez besoin d'un marteau ou un clé pour ouvrir ce coffre.")
+            player.add_message("Vous avez besoin d'un marteau ou d'une clé pour ouvrir ce coffre.")
     
     def open_chest(self, player):
-        self.already_opened = True
-        # Random reward
-        rewards = [
-            Or(random.randint(3, 8)),
-            Gemmes(random.randint(1, 3)),
-            Cles(1),
-            Des(random.randint(1, 2))
-        ]
-        reward = random.choice(rewards)
-        reward.pick_up(player)
+        # Check for luck modifiers
+        has_rabbits_foot = player.inventory.has_permanent("Patte de lapin")
+        has_metal_detector = player.inventory.has_permanent("Détecteur de métaux")
+        
+        luck_multiplier = 1.15 if has_rabbits_foot else 1.0
+        
+        # Build weighted list based on luck modifiers
+        possible_rewards = []
+        
+        # Or and Gemmes are metallic (benefit from detector)
+        or_chance = 0.8 * luck_multiplier
+        if has_metal_detector:
+            or_chance *= 1.25
+        if random.random() < or_chance:
+            possible_rewards.append(Or(random.randint(5, 12)))
+        
+        gemmes_chance = 0.7 * luck_multiplier
+        if has_metal_detector:
+            gemmes_chance *= 1.25
+        if random.random() < gemmes_chance:
+            possible_rewards.append(Gemmes(random.randint(2, 4)))
+        
+        # Cles are metallic
+        cles_chance = 0.6 * luck_multiplier
+        if has_metal_detector:
+            cles_chance *= 1.25
+        if random.random() < cles_chance:
+            possible_rewards.append(Cles(random.randint(1, 2)))
+        
+        # Des and Pas are not metallic
+        des_chance = 0.5 * luck_multiplier
+        if random.random() < des_chance:
+            possible_rewards.append(Des(random.randint(1, 3)))
+        
+        pas_chance = 0.7 * luck_multiplier
+        if random.random() < pas_chance:
+            possible_rewards.append(Pas(random.randint(10, 20)))
+        
+        if not possible_rewards:
+            player.add_message("Le coffre était vide...")
+        else:
+            player.add_message(f"Le coffre contenait {len(possible_rewards)} objet(s):")
+            for reward in possible_rewards:
+                reward.pick_up(player)
+                player.add_message(f"  • {reward.nom}")
 
 
     def should_consume_on_pickup(self):
@@ -469,26 +500,58 @@ class EndroitCreuser(AutreObjet):
             player.add_message("Vous creusez avec la pelle...")
             self.already_dug = True
             
-            # Chance-based rewards
-            chance = random.random()
+            # Check for luck modifiers
+            has_rabbits_foot = player.inventory.has_permanent("Patte de lapin")
+            has_metal_detector = player.inventory.has_permanent("Détecteur de métaux")
             
-            # DetecteurMetaux improves chances
-            if player.inventory.has_permanent("Détecteur de métaux"):
-                chance += 0.2  # +20% better luck
+            luck_multiplier = 1.15 if has_rabbits_foot else 1.0
+            
+            if has_metal_detector:
                 player.add_message("Le détecteur de métaux augmente vos chances!")
             
-            if chance < 0.3:
+            # Build weighted list based on luck modifiers
+            possible_rewards = []
+            
+            # Or and Gemmes are metallic (benefit from detector)
+            or_chance = 0.5 * luck_multiplier
+            if has_metal_detector:
+                or_chance *= 1.25
+            if random.random() < or_chance:
+                possible_rewards.append(Or(random.randint(3, 8)))
+            
+            gemmes_chance = 0.4 * luck_multiplier
+            if has_metal_detector:
+                gemmes_chance *= 1.25
+            if random.random() < gemmes_chance:
+                possible_rewards.append(Gemmes(random.randint(1, 2)))
+            
+            # Cles are metallic
+            cles_chance = 0.35 * luck_multiplier
+            if has_metal_detector:
+                cles_chance *= 1.25
+            if random.random() < cles_chance:
+                possible_rewards.append(Cles(1))
+            
+            # Non-metallic items
+            pas_chance = 0.6 * luck_multiplier
+            if random.random() < pas_chance:
+                possible_rewards.append(Pas(random.randint(5, 15)))
+            
+            pomme_chance = 0.3 * luck_multiplier
+            if random.random() < pomme_chance:
+                possible_rewards.append(Pomme())
+            
+            banane_chance = 0.3 * luck_multiplier
+            if random.random() < banane_chance:
+                possible_rewards.append(Banane())
+            
+            if not possible_rewards:
                 player.add_message("Vous ne trouvez rien...")
-            elif chance < 0.6:
-                # Small reward (less metal objects)
-                reward = random.choice([Gemmes(2), Or(2), Pas(5)])
-                reward.pick_up(player)
-                player.add_message(f"Vous avez trouvé: {reward.nom}!")
             else:
-                # Big reward (more metal objects)
-                reward = random.choice([Gemmes(2), Cles(1), Or(5)])
-                reward.pick_up(player)
-                player.add_message(f"Vous avez trouvé: {reward.nom}!")
+                player.add_message(f"Vous avez trouvé {len(possible_rewards)} objet(s):")
+                for reward in possible_rewards:
+                    reward.pick_up(player)
+                    player.add_message(f"  • {reward.nom}")
         else:
             player.add_message("Vous avez besoin d'une pelle pour creuser ici.")
 
@@ -500,10 +563,9 @@ class EndroitCreuser(AutreObjet):
 
 class Casier(AutreObjet):
     """Casier du vestiaire contient parfois des objets"""
-    def __init__(self, locked = True, lock_level = 1):
+    def __init__(self, locked = True):
         super().__init__("Casier", "Present dans le vestiaire peut contenir des objets.")
         self.locked = locked
-        self.lock_level = lock_level
         self.already_opened = False
 
     def pick_up(self, player):
@@ -512,42 +574,79 @@ class Casier(AutreObjet):
             return
         
         if not self.locked:
+            self.already_opened = True
             self.open_locker(player)
             return
         
-        # Level 1 lock: needs Kit de crochetage
-        if self.lock_level == 1:
-            if player.inventory.has_permanent("Kit de crochetage"):
-                player.add_message("Vous crochetez le casier avec le kit!")
-                self.open_locker(player)
-            elif player.cles > 0:
-                player.cles -= 1
-                player.add_message(f"Vous utilisez une clé! (Reste: {player.cles})")
-                self.open_locker(player)
-            else:
-                player.add_message("Ce casier nécessite une clé ou un kit de crochetage.")
-        
-        # Level 2 lock: needs Key
-        elif self.lock_level == 2:
-            if player.cles > 0:
-                player.cles -= 1
-                player.add_message(f"Vous utilisez une clé! (Reste: {player.cles})")
-                self.open_locker(player)
-            else:
-                player.add_message("Ce casier nécessite une clé.")
+        # Casiers can only be opened with keys
+        if player.cles > 0:
+            player.cles -= 1
+            player.add_message(f"Vous utilisez une clé pour ouvrir le casier! (Reste: {player.cles})")
+            self.already_opened = True
+            self.open_locker(player)
+        else:
+            player.add_message("Ce casier nécessite une clé.")
 
     def open_locker(self, player):
-        self.already_opened = True
-        # Random reward
-        rewards = [
-            Or(random.randint(1, 5)),
-            Gemmes(random.randint(1, 2)),
-            Pas(random.randint(5, 15))
-        ]
-        reward = random.sample(rewards, random.randint(1, 3))
-        for item in reward:
-            item.pick_up(player)
-            player.add_message(f"Vous avez trouvé: {item.nom} dans le casier!")
+        # Check for luck modifiers
+        has_rabbits_foot = player.inventory.has_permanent("Patte de lapin")
+        has_metal_detector = player.inventory.has_permanent("Détecteur de métaux")
+        
+        luck_multiplier = 1.15 if has_rabbits_foot else 1.0
+        
+        # Empty chance reduced by luck
+        empty_chance = 0.3 / luck_multiplier
+        if random.random() < empty_chance:
+            player.add_message("Le casier est vide...")
+            return
+        
+        # Build weighted list based on luck modifiers
+        possible_rewards = []
+        
+        # Or and Gemmes are metallic (benefit from detector)
+        or_chance = 0.6 * luck_multiplier
+        if has_metal_detector:
+            or_chance *= 1.25
+        if random.random() < or_chance:
+            possible_rewards.append(Or(random.randint(2, 6)))
+        
+        gemmes_chance = 0.5 * luck_multiplier
+        if has_metal_detector:
+            gemmes_chance *= 1.25
+        if random.random() < gemmes_chance:
+            possible_rewards.append(Gemmes(random.randint(1, 2)))
+        
+        # Cles are metallic
+        cles_chance = 0.4 * luck_multiplier
+        if has_metal_detector:
+            cles_chance *= 1.25
+        if random.random() < cles_chance:
+            possible_rewards.append(Cles(1))
+        
+        # Non-metallic items
+        pas_chance = 0.6 * luck_multiplier
+        if random.random() < pas_chance:
+            possible_rewards.append(Pas(random.randint(5, 10)))
+        
+        pomme_chance = 0.4 * luck_multiplier
+        if random.random() < pomme_chance:
+            possible_rewards.append(Pomme())
+        
+        banane_chance = 0.4 * luck_multiplier
+        if random.random() < banane_chance:
+            possible_rewards.append(Banane())
+        
+        des_chance = 0.3 * luck_multiplier
+        if random.random() < des_chance:
+            possible_rewards.append(Des(random.randint(1, 2)))
+        
+        if not possible_rewards:
+            player.add_message("Le casier est finalement vide...")
+        else:
+            player.add_message(f"Trouvé {len(possible_rewards)} objet(s) dans le casier:")
+            for item in possible_rewards:
+                item.pick_up(player)
+                player.add_message(f"  • {item.nom}")
 
     def should_consume_on_pickup(self):
         """Détermine si l'objet doit être consommé immédiatement après la collecte."""

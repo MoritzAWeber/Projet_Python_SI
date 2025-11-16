@@ -132,14 +132,14 @@ class Game:
 
                 # ---- Navigation principale ----
                 elif not self.menu_active and not self.pickup_menu_active and not self.confirm_door_active:
-                    if event.key in (pygame.K_z, pygame.K_w):
-                        self.player.move("up", self.manor)
+                    if event.key == pygame.K_z:
+                        self.selected_door = "up"
                     elif event.key == pygame.K_s:
-                        self.player.move("down", self.manor)
+                        self.selected_door = "down"
                     elif event.key == pygame.K_q:
-                        self.player.move("left", self.manor)
+                        self.selected_door = "left"
                     elif event.key == pygame.K_d:
-                        self.player.move("right", self.manor)
+                        self.selected_door = "right"
                     elif event.key == pygame.K_UP:
                         self.selected_door = "up"
                     elif event.key == pygame.K_DOWN:
@@ -655,25 +655,13 @@ class Game:
                     display_text = display_text + f" x {obj.valeur}"
                 # Ajoute le lock level pour les Casiers
                 elif obj.__class__.__name__ == "Casier":
-                    if hasattr(obj, 'already_opened') and obj.already_opened:
-                        display_text += "[Ouvert]"
-                    elif hasattr(obj, 'lock_level'):
-                        if obj.lock_level == 1:
-                            display_text += "[Kit requis]"
-                        elif obj.lock_level == 2:
-                            display_text += "[Clé requise]"
+                    display_text += "[Clé requise]"
                 # Ajoute l'état pour les Coffres
                 elif obj.__class__.__name__ == "Coffre":
-                    if hasattr(obj, 'already_opened') and obj.already_opened:
-                        display_text += "[Vide]"
-                    else:
-                        display_text += "[Marteau requis]"
+                    display_text += "[Marteau  ou Clé requis]"
                 # Ajoute l'état pour EndroitCreuser
                 elif obj.__class__.__name__ == "EndroitCreuser":
-                    if hasattr(obj, 'already_dug') and obj.already_dug:
-                        display_text += "[Creusé]"
-                    else:
-                        display_text += "[Pelle requise]"
+                    display_text += "[Pelle requise]"
                 line = self.font_small.render(display_text, True, text_color)
                 self.screen.blit(line, (x, y))
                 y += 22

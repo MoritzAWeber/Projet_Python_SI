@@ -3,21 +3,21 @@ import random
 from abc import ABC, abstractmethod
 
 from .entities import (
-    Pomme, Banane, Or, Gemmes, Cles, Des, Pelle, Marteau, EndroitCreuser, DetecteurMetaux, PatteLapin
+    Pomme, Banane, Or, Gemmes, Cles, Des, Pelle, Marteau, EndroitCreuser, DetecteurMetaux, PatteLapin, Coffre, Casier
 )
 
 
 # ==============================
 # Helper function for random loot
 # ==============================
-def generate_random_loot(player, item_pool, dig_spots_range=None, found_permanents=None):
+def generate_random_loot(player, item_pool, found_permanents=None):
     """Generates a random subset of pre-instantiated items.
 
     Parameters:
     - player: Player instance or None. If None, luck modifiers are ignored.
     - item_pool: list[Objet] of candidate instances (duplicates model max quantity).
     - dig_spots_range: optional (min,max) tuple to append that many EndroitCreuser instances.
-    - found_permanents: optional set of permanent class names already found (skips these).
+    - found_permanents: optional set of permanent class names already found.
 
     Returns:
     - list[Objet]: randomly selected instances (subset of item_pool plus dig spots).
@@ -51,12 +51,6 @@ def generate_random_loot(player, item_pool, dig_spots_range=None, found_permanen
         if random.random() < chance:
             result.append(item)
 
-    if dig_spots_range:
-        min_spots, max_spots = dig_spots_range
-        num_spots = random.randint(min_spots, max_spots)
-        for _ in range(num_spots):
-            result.append(EndroitCreuser())
-
     return result
 
 
@@ -85,13 +79,8 @@ class Room(ABC):
         self.gem_cost = gem_cost
         self.item_pool = item_pool if item_pool else []
         self.objets = objets if objets else []
-        # Initial random loot (player luck not applied yet)
-        if self.item_pool:
-            try:
-                initial_loot = generate_random_loot(None, self.item_pool)
-                self.objets.extend(initial_loot)
-            except Exception:
-                pass
+        # Loot will be generated on first entry with player luck
+        self.loot_generated = False
         self.rarity = rarity
         self.placement_condition = placement_condition
         self.color = color
@@ -101,6 +90,15 @@ class Room(ABC):
 
     def has_door(self, direction):
         return direction in self.doors
+
+    def generate_loot_on_enter(self, player):
+        """Generate loot with player luck modifiers on first room entry."""
+        if not self.loot_generated and self.item_pool:
+            manor = getattr(player, "manor", None)
+            found_perms = getattr(manor, 'found_permanents', set()) if manor else set()
+            loot = generate_random_loot(player, self.item_pool, found_permanents=found_perms)
+            self.objets.extend(loot)
+            self.loot_generated = True
 
     def create_rotated_copy(self, num_rotations):
         """Effect:
@@ -134,6 +132,7 @@ class Room(ABC):
         rotated.gem_cost = self.gem_cost
         rotated.item_pool = self.item_pool  # Copy item_pool reference
         rotated.objets = self.objets.copy()
+        rotated.loot_generated = self.loot_generated  # Copy loot generation flag
         rotated.rarity = self.rarity
         rotated.placement_condition = self.placement_condition
         rotated.color = self.color  # Copy color
@@ -152,7 +151,8 @@ class Room(ABC):
         pass
 
     def apply_effect_on_enter(self, player):
-        pass
+        """Default behavior: generate loot on first entry."""
+        self.generate_loot_on_enter(player)
 
 
 # ==============================
@@ -166,7 +166,7 @@ class EntranceHall(Room):
             doors=["up", "left", "right"],
             placement_condition="bottom",
             color="blue",
-            objets=[Pelle(), EndroitCreuser()] 
+            objets=[]
         )
 
 
@@ -211,11 +211,8 @@ class Greenhouse(Room):
         manor.green_draw_bonus += 1
         print("Greenhouse : bonus de tirage de pièces vertes augmenté.")
         
-        # Generate random loot
-        found_perms = getattr(manor, 'found_permanents', set())
-        loot = generate_random_loot(player, self.item_pool, found_permanents=found_perms)
-        self.objets.extend(loot)
-        print(f"Greenhouse : {len(loot)} objets générés.")
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
 
 class MorningRoom(Room):
     """
@@ -226,7 +223,7 @@ class MorningRoom(Room):
             name="Morning Room",
             image=pygame.image.load("assets/rooms/Green/Morning_Room.png"),
             doors=["down", "left"],
-            item_pool=[Gemmes(2), EndroitCreuser(), Pelle()],
+            item_pool=[Gemmes(2), EndroitCreuser(), Pelle(), Coffre()],
             rarity=1,
             placement_condition="edge",
             color="green"
@@ -236,13 +233,11 @@ class MorningRoom(Room):
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
         
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         player.gemmes += 2
         print("Morning Room : vous gagnez 2 gemmes.")
-        
-        manor = getattr(player, "manor", None)
-        found_perms = getattr(manor, 'found_permanents', set()) if manor else set()
-        loot = generate_random_loot(player, self.item_pool, found_permanents=found_perms)
-        self.objets.extend(loot)
         self.effect_triggered = True 
 
 
@@ -264,6 +259,9 @@ class SecretGarden(Room):
 
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
+        
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
         
         manor = getattr(player, "manor", None)
         if manor is None:
@@ -309,6 +307,9 @@ class Veranda(Room):
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
         
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         manor = getattr(player, "manor", None)
         if manor is None:
             return
@@ -324,7 +325,7 @@ class Cloister(Room):
             image=pygame.image.load("assets/rooms/Green/Cloister.png"),
             doors=["left", "right", "up", "down"],
             gem_cost=3,
-            item_pool=[Gemmes(2), EndroitCreuser(), EndroitCreuser(), Cles(1)],
+            item_pool=[Gemmes(2), EndroitCreuser(), EndroitCreuser(), Cles(1), Pelle()],
             rarity=1,
             placement_condition="center",
             color="green"
@@ -336,7 +337,7 @@ class Courtyard(Room):
             name="Courtyard",
             image=pygame.image.load("assets/rooms/Green/Courtyard.png"),
             doors=["left", "right", "down"],
-            item_pool=[Or(3), EndroitCreuser(), EndroitCreuser(), Pomme(), Pomme(), Banane(), Banane()],
+            item_pool=[Or(3), EndroitCreuser(), EndroitCreuser(), Pomme(), Pomme(), Banane(), Banane(), Pelle()],
             rarity=1,
             placement_condition="center",
             color="green"
@@ -360,6 +361,9 @@ class Patio(Room):
 
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
+        
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
         
         manor = getattr(player, "manor", None)
         if manor is None:
@@ -394,6 +398,9 @@ class Terrace(Room):
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
         
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         manor = getattr(player, "manor", None)
         if manor is None:
             return
@@ -415,7 +422,7 @@ class HerLadyshipsChamber(Room):
             name="HerLadyshipsChamber",
             image=pygame.image.load("assets/rooms/Purple/Her_Ladyships_Chamber.png"),
             doors=["down"],
-            item_pool=[Gemmes(2), Cles(1), Des(1)],
+            item_pool=[Gemmes(2), Cles(1), Des(1), Coffre()],
             rarity=2,
             placement_condition="any",
             color="purple"
@@ -442,13 +449,16 @@ class MasterBedroom(Room):
             image=pygame.image.load("assets/rooms/Purple/Master_Bedroom.png"),
             doors=["down"],
             gem_cost=2,
-            item_pool=[Gemmes(1), Cles(1)],
+            item_pool=[Gemmes(1), Cles(1), Coffre()],
             rarity=2,
             placement_condition="any",
             color="purple"
         )
 
     def apply_effect_on_enter(self, player):
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         manor = player.manor
         count = sum(1 for y in range(manor.HEIGHT) for x in range(manor.WIDTH) if manor.get_room(x, y))
         player.gagner_pas(count)
@@ -474,6 +484,9 @@ class Nursery(Room):
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
         
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         player.manor.bonus_on_draft_bedroom = True
         print("Nursery : désormais, chaque draft d'une Bedroom donne +5 pas.")
         self.effect_triggered = True 
@@ -495,6 +508,9 @@ class ServantsQuarters(Room):
         )
 
     def apply_effect_on_enter(self, player):
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         manor = player.manor
         count = 0
         for y in range(manor.HEIGHT):
@@ -527,6 +543,9 @@ class Bedroom(Room):
         )
 
     def apply_effect_on_enter(self, player):
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         player.gagner_pas(2)
         print("Bedroom : +2 pas.")
 
@@ -546,6 +565,9 @@ class Boudoir(Room):
         )
 
     def apply_effect_on_enter(self, player):
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         manor = player.manor
         # Bonus one-shot (consomme le flag, donc doit être vérifié à chaque fois)
         if getattr(manor, "bonus_next_boudoir_steps", 0) > 0:
@@ -561,6 +583,7 @@ class BunkRoom(Room):
             name="BunkRoom",
             image=pygame.image.load("assets/rooms/Purple/Bunk_Room.png"),
             doors=["down"],
+            item_pool=[Or(2), Des(1)],
             rarity=2,
             placement_condition="any",
             color="purple"
@@ -585,6 +608,9 @@ class GuestBedroom(Room):
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
         
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         player.gagner_pas(10)
         print("Guest Bedroom : +10 pas.")
         self.effect_triggered = True 
@@ -600,7 +626,7 @@ class Corridor(Room):
             name="Corridor",
             image=pygame.image.load("assets/rooms/Orange/Corridor.png"),
             doors=["up", "down"],
-            item_pool=[Or(3), Cles(1), DetecteurMetaux()],
+            item_pool=[Or(3), Cles(1), DetecteurMetaux(), Pelle(), Coffre()],
             rarity=0,
             placement_condition="any",
             color="orange"
@@ -612,7 +638,7 @@ class EastWingHall(Room):
             name="EastWingHall",
             image=pygame.image.load("assets/rooms/Orange/East_Wing_Hall.png"),
             doors=["left", "right", "down"],
-            item_pool=[Or(3), Cles(1), EndroitCreuser()],
+            item_pool=[Or(3), Cles(1), EndroitCreuser(), Pelle(), Coffre()],
             rarity=1,
             placement_condition="any",
             color="orange"
@@ -624,7 +650,7 @@ class WestWingHall(Room):
             name="WestWingHall",
             image=pygame.image.load("assets/rooms/Orange/West_Wing_Hall.png"),
             doors=["left", "right", "down"],
-            item_pool=[Or(4), Cles(2), EndroitCreuser(), EndroitCreuser()],
+            item_pool=[Or(4), Cles(2), EndroitCreuser(), EndroitCreuser(), Pelle(), Coffre()],
             rarity=1,
             placement_condition="any",
             color="orange"
@@ -636,7 +662,7 @@ class Hallway(Room):
             name="Hallway",
             image=pygame.image.load("assets/rooms/Orange/Hallway.png"),
             doors=["left", "right", "down"],
-            item_pool=[Or(2), Cles(2), Des(1)],
+            item_pool=[Or(2), Cles(2), Des(1), Coffre()],
             rarity=0,
             placement_condition="any",
             color="orange"
@@ -648,7 +674,7 @@ class Passageway(Room):
             name="Passageway",
             image=pygame.image.load("assets/rooms/Orange/Passageway.png"),
             doors=["left", "right", "up", "down"],
-            item_pool=[Or(2), Cles(1)],
+            item_pool=[Or(2), Cles(1), Coffre()],
             rarity=0,
             placement_condition="any",
             color="orange"
@@ -660,6 +686,7 @@ class GreatHall(Room):
             name="GreatHall",
             image=pygame.image.load("assets/rooms/Orange/Great_Hall.png"),
             doors=["left", "right", "up", "down"],
+            item_pool=[Or(5), Gemmes(2), Cles(2)],
             rarity=2,
             placement_condition="any",
             color="orange"
@@ -675,7 +702,7 @@ class Foyer(Room):
             image=pygame.image.load("assets/rooms/Orange/Foyer.png"),
             doors=["up", "down"],
             gem_cost=2,
-            item_pool=[Or(3), Cles(1)],
+            item_pool=[Or(3), Cles(1), Casier()],
             rarity=2,
             placement_condition="any",
             color="orange"
@@ -684,6 +711,9 @@ class Foyer(Room):
 
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
+        
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
         
         player.manor.hallway_doors_unlocked = True
         print("Foyer : toutes les portes de Hallway sont déverrouillées.")
@@ -699,7 +729,7 @@ class SecretPassage(Room):
             name="SecretPassage",
             image=pygame.image.load("assets/rooms/Orange/Secret_Passage.png"),
             doors=["down"],
-            item_pool=[Gemmes(1), Des(1)],
+            item_pool=[Gemmes(1), Des(1), Casier()],
             rarity=3,
             placement_condition="any",
             color="orange"
@@ -708,6 +738,9 @@ class SecretPassage(Room):
 
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
+        
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
         
         player.manor.next_room_color_choice = True
         print("Secret Passage : vous pourrez choisir la couleur du prochain tirage.")
@@ -727,7 +760,7 @@ class LockerRoom(Room):
             name="LockerRoom",
             image=pygame.image.load("assets/rooms/Blue/Locker_Room.png"),
             doors=["up", "down"],
-            item_pool=[Or(3), Gemmes(2), Cles(4)],
+            item_pool=[Or(3), Gemmes(2), Cles(4), Casier()],
             rarity=1,
             placement_condition="any",
             color="blue"
@@ -736,6 +769,9 @@ class LockerRoom(Room):
 
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
+        
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
         
         manor = getattr(player, "manor", None)
         if manor is None:
@@ -770,7 +806,7 @@ class Vault(Room):
             image=pygame.image.load("assets/rooms/Blue/Vault.png"),
             doors=["down"],  # cul-de-sac
             gem_cost=3,
-            item_pool=[Or(40), Gemmes(3), Cles(1)],
+            item_pool=[Or(40), Gemmes(3), Cles(1), Coffre()],
             rarity=3,
             placement_condition="edge",
             color="blue"
@@ -779,6 +815,9 @@ class Vault(Room):
 
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
+        
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
         
         player.or_ += 40
         print("Vault : vous gagnez 40 pièces d'or.")
@@ -794,7 +833,7 @@ class Workshop(Room):
             name="Workshop",
             image=pygame.image.load("assets/rooms/Blue/Workshop.png"),
             doors=["up", "down"],
-            item_pool=[Pelle(), Marteau(), DetecteurMetaux(), PatteLapin()],
+            item_pool=[Pelle(), Marteau(), DetecteurMetaux(), PatteLapin(), Casier()],
             rarity=2,
             placement_condition="center",
             color="blue"
@@ -803,6 +842,9 @@ class Workshop(Room):
 
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
+        
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
         
         permanents = [Pelle(), Marteau(), DetecteurMetaux(), PatteLapin()]
         item = random.choice(permanents)
@@ -820,13 +862,16 @@ class BoilerRoom(Room):
             name="BoilerRoom",
             image=pygame.image.load("assets/rooms/Blue/Boiler_Room.png"),
             doors=["left", "down", "right"],
-            item_pool=[EndroitCreuser(), DetecteurMetaux(), Or(3)],
+            item_pool=[EndroitCreuser(), DetecteurMetaux(), Or(3), Pelle()],
             rarity=2,
             placement_condition="center",
             color="blue"
         )
 
     def apply_effect_on_enter(self, player):
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         player.gagner_pas(3)
         print("Boiler Room : +3 pas.")
 
@@ -840,7 +885,7 @@ class ConferenceRoom(Room):
             name="ConferenceRoom",
             image=pygame.image.load("assets/rooms/Blue/Conference_Room.png"),
             doors=["down", "left", "right"],
-            item_pool=[Or(4), Gemmes(1), Cles(1), DetecteurMetaux()],
+            item_pool=[Or(4), Gemmes(1), Cles(1), DetecteurMetaux(), Pelle()],
             rarity=2,
             placement_condition="center",
             color="blue"
@@ -849,6 +894,9 @@ class ConferenceRoom(Room):
 
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
+        
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
         
         manor = player.manor
         manor.redirect_spread_to_conference = self
@@ -875,6 +923,9 @@ class Gallery(Room):
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
         
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         player.gemmes += 1
         print("Gallery : vous gagnez 1 gemme.")
         self.effect_triggered = True 
@@ -899,6 +950,9 @@ class Garage(Room):
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return
         
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         player.cles += 3
         print("Garage : vous gagnez 3 clés.")
         self.effect_triggered = True 
@@ -920,6 +974,9 @@ class Library(Room):
         )
 
     def apply_effect_on_enter(self, player):
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         manor = player.manor
         manor.rarity_bias += 1
         print("Library : biais de rareté augmenté (tirage de pièces rares favorisé).")
@@ -943,6 +1000,9 @@ class RumpusRoom(Room):
 
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
+        
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
         
         player.or_ += 8
         print("Rumpus Room : +8 pièces d'or.")
@@ -968,6 +1028,9 @@ class Pantry(Room):
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
         
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         player.or_ += 4
         print("Pantry : +4 pièces d'or.")
         self.effect_triggered = True 
@@ -992,6 +1055,9 @@ class Room8(Room):
     def apply_effect_on_enter(self, player):
         if self.effect_triggered: return 
         
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         player.gemmes += 1
         print("Room 8 : +1 gemme.")
         self.effect_triggered = True 
@@ -1014,6 +1080,9 @@ class Rotunda(Room):
         )
 
     def apply_effect_on_enter(self, player):
+        # Generate loot with player luck
+        self.generate_loot_on_enter(player)
+        
         # rotation des portes : up->right->down->left
         new_doors = []
         mapping = {"up": "right", "right": "down", "down": "left", "left": "up"}
